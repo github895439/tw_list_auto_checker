@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>tw list auto checker</title>
+<script src="jquery-3.4.1.js"></script>
+<script>
+//property
+//  unread: 0～9(未読数)、*(未読数か9を超える)、制御値
+//  tweetId: 最新既読tweetId
+//  tweetIdNext: 最新未読tweetId　→　使わなくなったが使えるように残す(未読オーバーするとチェックしなくなるため未読最新でなくなってしまう)
+//  overview: 最新未読tweetText　→　tweetIdNext関連であまりあてにならない
+//  reset: 未読リセット要求
+
+var ListStatus;
+var Index;
+
+function DEBUG(str)
+{
+	if (<%= setting.debug %>)
+	{
+		console.debug("[DEBUG] " + str);
+	}
+}
+
+//要素の増減等に対応しやすくするため
+function makeQuery(index)
+{
+    let ret = "";
+    let query = new Map();
+    query.set("<%= setting.queryReqIndex %>", index);
+    query.set("<%= setting.queryReqFirst %>", (ListStatus[index].unread == "") ? true : false);
+    for (var key of query.keys())
+    {
+        ret += key + "=" + query.get(key) + "&";
+    }
+    ret = ret.substr(0, ret.length - 1);
+    return ret;
+}
+
+function setTitle(title, index)
+{
+    let count = index * 1 + 1;
+    let arrayTitle = Array.from(title);
+    let tmpIndex = count + Math.floor(count / 4) - (count % 4 == 0 ? 1 : 0);
+    arrayTitle[tmpIndex - 1] = ListStatus[index].unread;
+    let ret = arrayTitle.join("");
+    return ret;
+}
+
+function analyzeRes(data)
+{
+    let res = JSON.parse(data);
+    let resIndex = res.<%= setting.queryResIndex %>
+    let resTweet = res.<%= setting.queryResTweet %>
+    DEBUG("from node.js: " + resIndex + ", " + resTweet.length);
+    if (ListStatus[resIndex].unread == "")
+    {
+        ListStatus[resIndex].unread = "0";
+        ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
+        ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
+        $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+        $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
+    }
+    else
+    {
+        let unread = 0;
+        ListStatus[resIndex].unread = "-1";
+        //使わなくなったが使えるように残す
+        // ListStatus[resIndex].tweetIdNext = resTweet[0].<%= setting.queryResTweetId %>;
+        $("#list_" + resIndex + "_Overview").html(resTweet[0].<%= setting.queryResOverview %>);
+        for (let index = 0; index < resTweet.length; index++)
+        {
+            if (resTweet[index].<%= setting.queryResTweetId %> == ListStatus[resIndex].tweetId)
+            {
+                ListStatus[resIndex].unread = unread + "";
+                DEBUG("unread count: " + ListStatus[resIndex].unread);
+                break;
+            }
+            unread++;
+        }
+        if (ListStatus[resIndex].unread == "-1")
+        {
+            ListStatus[resIndex].unread = "*";
+            DEBUG("unread over index: " + resIndex);
+        }
+        $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+    }
+    let title = $("title").text();
+    let tmpTitle = setTitle(title, resIndex);
+    $("title").text(tmpTitle);
+}
+
+function syncAjax(url)
+{
+	return new Promise(
+		function(resolve, reject)
+		{
+            $.ajax(
+                {
+                    url: url,
+                    error:
+                        function()
+                        {
+                            console.error("error no." + Index);
+                        },
+                    success:
+                        function(data)
+                        {
+                            resolve(data);
+                        }
+                });
+		}
+	);
+}
+
+async function K_ajax()
+{
+    let query = makeQuery(Index);
+    let url = "<%= setting.urlBase %>" + ":" + "<%= setting.port %>" + "<%= setting.urlCheck %>";
+    url += "?" + query;
+    DEBUG("ajax: " + url);
+    $("#status").attr("value", "No." + Index + " チェック中");
+    let ajaxRes = await syncAjax(url);
+    $("#status").attr("value", "未通信");
+    analyzeRes(ajaxRes);
+}
+
+function syncCheck()
+{
+	return new Promise(
+		function(resolve, reject)
+		{
+            K_ajax();
+            resolve();
+		}
+	);
+}
+
+async function check()
+{
+    if (!$("#ctrl").prop("checked"))
+    {
+        for (let count = 0; count < <%= list.length %>; count++)
+        {
+            if (ListStatus[Index].reset == "true")
+            {
+                ListStatus[Index].reset = "false";
+                ListStatus[Index].unread = "";
+                ListStatus[Index].overview = "";
+                $("#list_" + Index + "_Unread").html(ListStatus[Index].unread);
+                $("#list_" + Index + "_Overview").html(ListStatus[Index].overview);
+            }
+            if ((((ListStatus[Index].unread >= 0) && (ListStatus[Index].unread <= 9))) || (ListStatus[Index].unread == ""))
+            {
+                await K_ajax();
+                $("#list_" + Index + "_CheckDatetime").html(Date().toLocaleString());
+            }
+            Index = (Index + 1) % <%= list.length %>;
+            if (!<%= setting.allatonce %>)
+            {
+                break;
+            }
+        }
+    }
+    setTimeout(check, <%= setting.checkIntervalMs %>);
+}
+
+function resetUnread(index)
+{
+    ListStatus[index].reset = "true";
+    DEBUG("unread reset index: " + index);
+}
+
+function K_onload()
+{
+    setTimeout(check, <%= setting.checkIntervalMs %>);
+}
+
+//視認性を上げるために区切りを入れる
+function makeInitTitle(listLength)
+{
+    let tmpListLength = listLength + Math.floor(listLength / 4) - (listLength % 4 == 0 ? 1 : 0);
+    let tmpStr = "?".repeat(tmpListLength);
+    let arrayStr = Array.from(tmpStr);
+    for (let index = 4; index < listLength; index += 5) {
+        arrayStr[index] = " ";
+    }
+    let ret = arrayStr.join("");
+    return ret;
+}
+
+function initialize()
+{
+    ListStatus = [];
+    for (let index = 0; index < <%= list.length %>; index++)
+    {
+        ListStatus.push(
+            {
+                unread: "",
+                tweetId: "",
+                tweetIdNext: "",
+                overview: "",
+                reset: "false"
+            });
+    }
+    Index = 0;
+    let initTitle = makeInitTitle(<%= list.length %>)
+    $("title").text(initTitle);
+}
+
+initialize();
+
+</script>
+</head>
+<body onload="K_onload();">
+<style>
+td { white-space:nowrap; }
+</style>
+<form>
+    状態<input id="status" type="text" value="未通信" readonly>　チェック停止<input type="checkbox" id="ctrl">
+</form>
+<table border="1">
+    <tr>
+        <td>No.</td>
+        <td>未読数</td>
+        <td>リスト別名</td>
+        <td>URL</td>
+        <td hidden>チェック日時</td>
+        <td hidden>最新概要</td>
+    </tr>
+<%
+var nowobj = new Date();
+for (var i = 0; i < list.length; i++)
+{
+%>
+    <tr>
+        <td><%= i %></td>
+        <td id="list_<%= i %>_Unread"></td>
+        <td><%= list[i].alias %></td>
+        <td><a href="<%= list[i].url %>" target="twitter_auto_checker_<%= i %>" onclick="resetUnread(<%= i %>);"><%= list[i].url %></a></td>
+        <td id="list_<%= i %>_CheckDatetime" hidden><%= nowobj.toLocaleString() %></td>
+        <td id="list_<%= i %>_Overview" hidden></td>
+    </tr>
+<%
+    if ( i % 4 == 3)
+    {
+%>
+    <!--視認性を上げるために区切りを入れる-->
+    <tr></tr><tr></tr>
+<%
+    }
+}
+%>
+</table>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+    "//": 
+        {
+            "debug": "trueにするとdebugログを出力する",
+            "port": "node.jsのWebポート",
+            "checkIntervalMs": "tweetのチェック間隔(ms単位。1間隔で1リストを処理する。API制限は900アクセス/15分(=900秒)。)",
+            "urlBase": "node.jsのベースURL",
+            "urlCheck": "node.jsのチェックURL(ajaxから使用)",
+            "queryReqIndex": "チェックURLリクエストで使用するリスト番号のクエリーキーワード",
+            "queryReqFirst": "チェックURLリクエストで使用する初回判定のクエリーキーワード",
+            "queryResIndex": "チェックURLレスポンスで使用するリスト番号のプロパティ",
+            "queryResTweet": "チェックURLレスポンスで使用するtweet配列のプロパティ",
+            "queryResTweetId": "チェックURLレスポンスで使用するtweetIdのプロパティ",
+            "queryResOverview": "チェックURLレスポンスで使用するtweet概要のプロパティ",
+            "urlTwitterList": "リストTLを取得するTwitterAPI",
+            "overviewLength": "最新概要に表示する長さ",
+            "allatonce": "trueにすると1チェックで全リストをチェックする"
+        },
+    "debug": "false",
+    "port": "8080",
+    "checkIntervalMs": "10000",
+    "urlBase": "http://localhost",
+    "urlCheck": "/ajax/check",
+    "queryReqIndex": "index",
+    "queryReqFirst": "first",
+    "queryResIndex": "index",
+    "queryResTweet": "tweet",
+    "queryResTweetId": "tweetId",
+    "queryResOverview": "overview",
+    "urlTwitterList": "/lists/statuses.json",
+    "overviewLength": "50",
+    "allatonce": "true"
+}
