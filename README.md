@@ -40,8 +40,7 @@ https://developer.twitter.com/en/apps
 https://qiita.com/y_ishihara/items/501bb6fddc785a56780e )
 
 # 導入(チェッカー)
-下記のgithubのリポジトリをダウンロードする。  
-★  
+本リポジトリをダウンロードする。  
 ダウンロードしたものを展開する。  
 data/key.jsonファイルに「導入(Twitterのアプリ連携キーの取得)」で取得したキーを入力する。  
 (「""」で括る。)  
