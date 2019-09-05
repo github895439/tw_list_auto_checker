@@ -5,39 +5,71 @@
 <title>tw list auto checker</title>
 <script src="jquery-3.4.1.js"></script>
 <script>
-//property
-//  unread: 0～9(未読数)、*(未読数か9を超える)、制御値
-//  tweetId: 最新既読tweetId
-//  tweetIdNext: 最新未読tweetId　→　使わなくなったが使えるように残す(未読オーバーするとチェックしなくなるため未読最新でなくなってしまう)
-//  overview: 最新未読tweetText　→　tweetIdNext関連であまりあてにならない
-//  reset: 未読リセット要求
-
+/**
+ * リスト状態
+ *
+ * @property {string}  unread - 0～9(未読数)、*(未読数か9を超える)、制御値
+ * @property {string}  tweetId - 最新既読tweetId
+ * @property {string}  tweetIdNext - 最新未読tweetId　→　使わなくなったが使えるように残す(未読オーバーするとチェックしなくなるため未読最新でなくなってしまう)
+ * @property {string}  overview - 最新未読tweetText　→　tweetIdNext関連であまりあてにならない
+ * @property {string}  reset - 未読リセット要求
+ */
 var ListStatus;
+
+/**
+ * 現チェックリストNo.
+ *
+ * @static
+ */
 var Index;
 
+/**
+ * デバッグ出力ラッパー
+ *
+ * @constructor
+ * @param {string} str デバッグ出力文字列
+ */
 function DEBUG(str)
 {
+    //デバッグモードか
 	if (<%= setting.debug %>)
 	{
 		console.debug("[DEBUG] " + str);
 	}
 }
 
-//要素の増減等に対応しやすくするため
+/**
+ * ajaxのクエリを作成する。
+ * 要素の増減等に対応しやすくすることを考慮している。
+ *
+ * @constructor
+ * @param {string} index チェックするリストNo.
+ */
 function makeQuery(index)
 {
     let ret = "";
     let query = new Map();
     query.set("<%= setting.queryReqIndex %>", index);
     query.set("<%= setting.queryReqFirst %>", (ListStatus[index].unread == "") ? true : false);
+
+    //全要素を連結するループ
     for (var key of query.keys())
     {
         ret += key + "=" + query.get(key) + "&";
     }
+
     ret = ret.substr(0, ret.length - 1);
     return ret;
 }
 
+/**
+ * 未読数を設定したタイトル文字列を作成する。
+ * 区切り文字があることを考慮している。
+ *
+ * @constructor
+ * @param {string} title 現在のタイトル文字列
+ * @param {string} index 未読数を設定するリストNo.
+ */
 function setTitle(title, index)
 {
     let count = index * 1 + 1;
@@ -48,14 +80,22 @@ function setTitle(title, index)
     return ret;
 }
 
+/**
+ * ajaxの応答を解析する。
+ *
+ * @constructor
+ * @param {object} data ajaxの応答
+ */
 function analyzeRes(data)
 {
     let res = JSON.parse(data);
     let resIndex = res.<%= setting.queryResIndex %>
     let resTweet = res.<%= setting.queryResTweet %>
     DEBUG("from node.js: " + resIndex + ", " + resTweet.length);
+
+    //初回チェックか
     if (ListStatus[resIndex].unread == "")
-    {
+    {//初回である
         ListStatus[resIndex].unread = "0";
         ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
         ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
@@ -63,34 +103,53 @@ function analyzeRes(data)
         $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
     }
     else
-    {
+    {//初回ではない
         let unread = 0;
         ListStatus[resIndex].unread = "-1";
         //使わなくなったが使えるように残す
         // ListStatus[resIndex].tweetIdNext = resTweet[0].<%= setting.queryResTweetId %>;
         $("#list_" + resIndex + "_Overview").html(resTweet[0].<%= setting.queryResOverview %>);
+
+        //APIが戻したTweetをチェックするループ
         for (let index = 0; index < resTweet.length; index++)
         {
+            //既読TweetがAPIが戻したTweetにあったか
             if (resTweet[index].<%= setting.queryResTweetId %> == ListStatus[resIndex].tweetId)
             {
                 ListStatus[resIndex].unread = unread + "";
                 DEBUG("unread count: " + ListStatus[resIndex].unread);
                 break;
             }
+
             unread++;
         }
+
+        //既読Tweetがなかった(=未読数が10以上)か
         if (ListStatus[resIndex].unread == "-1")
         {
             ListStatus[resIndex].unread = "*";
             DEBUG("unread over index: " + resIndex);
         }
+
         $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
     }
+
     let title = $("title").text();
+
+    //未読数をタイトルに設定
     let tmpTitle = setTitle(title, resIndex);
+
     $("title").text(tmpTitle);
 }
 
+/**
+ * ajaxを呼び出す。
+ * 同期化を考慮している。
+ * (待たせる方)
+ *
+ * @constructor
+ * @param {string} url ajaxの通信先
+ */
 function syncAjax(url)
 {
 	return new Promise(
@@ -100,11 +159,22 @@ function syncAjax(url)
                 {
                     url: url,
                     error:
+                        /**
+                        * ajax失敗コールバック
+                        *
+                        * @constructor
+                        */
                         function()
                         {
                             console.error("error no." + Index);
                         },
                     success:
+                        /**
+                        * ajax成功コールバック
+                        *
+                        * @constructor
+                        * @param {object} data 受信データ
+                        */
                         function(data)
                         {
                             resolve(data);
@@ -114,35 +184,78 @@ function syncAjax(url)
 	);
 }
 
+/**
+ * ajaxを呼び出す。
+ * 同期化を考慮している。
+ * (待つ方)
+ *
+ * @constructor
+ */
 async function K_ajax()
 {
+    //ajaxクエリ作成
     let query = makeQuery(Index);
+
     let url = "<%= setting.urlBase %>" + ":" + "<%= setting.port %>" + "<%= setting.urlCheck %>";
     url += "?" + query;
     DEBUG("ajax: " + url);
     $("#status").attr("value", "No." + Index + " チェック中");
+
+    //同期ajax
     let ajaxRes = await syncAjax(url);
+
     $("#status").attr("value", "未通信");
+
+    //ajaxの応答解析
     analyzeRes(ajaxRes);
 }
 
+/**
+ * ajaxを使用して解析を行う。
+ * 同期化を考慮している。
+ * (待たせる方)
+ *
+ * @constructor
+ */
 function syncCheck()
 {
 	return new Promise(
+		/**
+		 * ajaxを使用して解析を行う。
+		 * 同期化を考慮している。
+		 * 失敗した場合はajaxがエラー出力する。
+		 * (待たせる方)
+		 *
+		 * @constructor
+		 * @param resolve 成功コールバック
+		 * @param reject 失敗コールバック
+		 */
 		function(resolve, reject)
 		{
+            //ajaxを使ってチェック
             K_ajax();
+
             resolve();
 		}
 	);
 }
 
+/**
+ * ajaxを使用して解析を行う。
+ * 同期化を考慮している。
+ * (待つ方)
+ *
+ * @constructor
+ */
 async function check()
 {
+    //画面でチェック停止されていないか
     if (!$("#ctrl").prop("checked"))
     {
+        //全リストのループ
         for (let count = 0; count < <%= list.length %>; count++)
         {
+            //リセットされているか
             if (ListStatus[Index].reset == "true")
             {
                 ListStatus[Index].reset = "false";
@@ -151,48 +264,88 @@ async function check()
                 $("#list_" + Index + "_Unread").html(ListStatus[Index].unread);
                 $("#list_" + Index + "_Overview").html(ListStatus[Index].overview);
             }
+
+            //初回やチェック有効(=未読オーバーではない)であるか
             if ((((ListStatus[Index].unread >= 0) && (ListStatus[Index].unread <= 9))) || (ListStatus[Index].unread == ""))
             {
+                //同期式でajaxを使ってチェック
                 await K_ajax();
+
                 $("#list_" + Index + "_CheckDatetime").html(Date().toLocaleString());
             }
+
             Index = (Index + 1) % <%= list.length %>;
+            
+            //1回で全チェックしない設定か
             if (!<%= setting.allatonce %>)
             {
                 break;
             }
         }
     }
+
     setTimeout(check, <%= setting.checkIntervalMs %>);
 }
 
+/**
+ * 未読をリセットする。
+ *
+ * @constructor
+ * @param {string} index 未読をリセットするリストNo.
+ */
 function resetUnread(index)
 {
     ListStatus[index].reset = "true";
     DEBUG("unread reset index: " + index);
 }
 
+/**
+ * bodyタグのロードハンドラ
+ *
+ * @constructor
+ */
 function K_onload()
 {
     setTimeout(check, <%= setting.checkIntervalMs %>);
 }
 
-//視認性を上げるために区切りを入れる
+/**
+ * 初期表示のタイトル文字列を作成する。
+ * 視認性を上げるために区切りを入れることを考慮している。
+ *
+ * @constructor
+ * @param {string} listLength リスト数
+ */
 function makeInitTitle(listLength)
 {
     let tmpListLength = listLength + Math.floor(listLength / 4) - (listLength % 4 == 0 ? 1 : 0);
     let tmpStr = "?".repeat(tmpListLength);
     let arrayStr = Array.from(tmpStr);
-    for (let index = 4; index < listLength; index += 5) {
+
+    //区切りを入れるループ
+    for (let index = 4; index < listLength; index += 5)
+    {
         arrayStr[index] = " ";
     }
+
     let ret = arrayStr.join("");
     return ret;
 }
 
+/**
+ * 下記を初期化する。
+ * ・リスト状態
+ * ・現チェックリストNo.
+ * ・タイトル
+ *
+ * @constructor
+ * @param {string} listLength リスト数
+ */
 function initialize()
 {
     ListStatus = [];
+
+    //リスト状態を初期化するループ
     for (let index = 0; index < <%= list.length %>; index++)
     {
         ListStatus.push(
@@ -204,11 +357,16 @@ function initialize()
                 reset: "false"
             });
     }
+
     Index = 0;
+
+    //区切りが入った未読数を表すタイトル作成
     let initTitle = makeInitTitle(<%= list.length %>)
+
     $("title").text(initTitle);
 }
 
+//初期化
 initialize();
 
 </script>
