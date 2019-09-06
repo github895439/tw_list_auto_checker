@@ -85,7 +85,7 @@ https://dev.classmethod.jp/server-side/node-js-server-side/q/
 - ejs(node.jsのテンプレート機能。JSP、ASPのようなもの。)  
 https://ejs.co/
 - ejsでモジュールを使用  
-https://qiita.com/SFPGMR/items/77a9a7a43d2f1ed181a8
+https://qiita.com/SFPGMR/items/77a9a7a43d2f1ed181a8  
 https://github.com/mde/ejs
 - node.jsでファイル読み  
 https://www.sejuku.net/blog/71663
