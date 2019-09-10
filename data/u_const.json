@@ -1,0 +1,7 @@
+{
+    "//": "スペルミスを文法エラー化するため",
+    "ON": "ON",
+    "OFF": "OFF",
+    "SUCCESS": "SUCCESS",
+    "ERROR": "ERROR"
+}

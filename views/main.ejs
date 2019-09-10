@@ -7,8 +7,7 @@
 <script>
 /**
  * リスト状態
- *
- * @property {string}  unread - 0～9(未読数)、*(未読数か9を超える)、制御値
+ * @property {string}  unread - 0～9(未読数)、*(未読数が9を超える)、制御値
  * @property {string}  tweetId - 最新既読tweetId
  * @property {string}  tweetIdNext - 最新未読tweetId　→　使わなくなったが使えるように残す(未読オーバーするとチェックしなくなるため未読最新でなくなってしまう)
  * @property {string}  overview - 最新未読tweetText　→　tweetIdNext関連であまりあてにならない
@@ -18,39 +17,63 @@ var ListStatus;
 
 /**
  * 現チェックリストNo.
- *
  * @static
  */
 var Index;
 
 /**
- * デバッグ出力ラッパー
- *
+ * デバッグモード
+ * クライアントでデバッグしやすくするため
+ * @static
+ */
+var Debug;
+
+/**
+ * 一括モード
+ * クライアントでデバッグしやすくするため
+ * @static
+ */
+var AllAtOnce;
+
+/**
+ * デバッグ動作ラッパー
  * @constructor
  * @param {string} str デバッグ出力文字列
  */
 function DEBUG(str)
 {
     //デバッグモードか
-	if (<%= setting.debug %>)
+	if (Debug == "<%= u_const.ON %>")
 	{
 		console.debug("[DEBUG] " + str);
 	}
 }
 
 /**
+ * エラー状態をトリムする。
+ * @constructor
+ * @param {string} unread 未読数
+ * @returns {string} 未読数(エラー状態無し)
+ */
+function trimError(unread)
+{
+    let ret = unread.replace("E", "");
+    return ret;
+}
+
+/**
  * ajaxのクエリを作成する。
  * 要素の増減等に対応しやすくすることを考慮している。
- *
  * @constructor
  * @param {string} index チェックするリストNo.
+ * @returns {string} 作成したajaxクエリ
  */
 function makeQuery(index)
 {
     let ret = "";
     let query = new Map();
     query.set("<%= setting.queryReqIndex %>", index);
-    query.set("<%= setting.queryReqFirst %>", (ListStatus[index].unread == "") ? true : false);
+    query.set("<%= setting.queryReqFirst %>", (trimError(ListStatus[index].unread) == "") ? "<%= u_const.ON %>" : "<%= u_const.OFF %>");
 
     //全要素を連結するループ
     for (var key of query.keys())
@@ -63,26 +86,39 @@ function makeQuery(index)
 }
 
 /**
+ * 未読数を取得する。
+ * エラーの場合は「E」になる。
+ * successかerrorで到達するため、引き数は「""」にはならない。
+ * @constructor
+ * @param {string} unread 元値
+ * @returns {string} 未読数(エラー状態は「E」)
+ */
+function getUnread(unread)
+{
+    let ret = unread.charAt(unread.length - 1);
+    return ret;
+}
+
+/**
  * 未読数を設定したタイトル文字列を作成する。
  * 区切り文字があることを考慮している。
- *
  * @constructor
  * @param {string} title 現在のタイトル文字列
  * @param {string} index 未読数を設定するリストNo.
+ * @returns {string} 未読数を設定したタイトル文字列
  */
 function setTitle(title, index)
 {
     let count = index * 1 + 1;
     let arrayTitle = Array.from(title);
     let tmpIndex = count + Math.floor(count / 4) - (count % 4 == 0 ? 1 : 0);
-    arrayTitle[tmpIndex - 1] = ListStatus[index].unread;
+    arrayTitle[tmpIndex - 1] = getUnread(ListStatus[index].unread);
     let ret = arrayTitle.join("");
     return ret;
 }
 
 /**
  * ajaxの応答を解析する。
- *
  * @constructor
  * @param {object} data ajaxの応答
  */
@@ -90,47 +126,57 @@ function analyzeRes(data)
 {
     let res = JSON.parse(data);
     let resIndex = res.<%= setting.queryResIndex %>
+    let resResult = res.<%= setting.queryResTwitterApiResult %>
     let resTweet = res.<%= setting.queryResTweet %>
-    DEBUG("from node.js: " + resIndex + ", " + resTweet.length);
+    DEBUG("from node.js: " + [resIndex, resResult, resTweet.length].join(","));
 
-    //初回チェックか
-    if (ListStatus[resIndex].unread == "")
-    {//初回である
-        ListStatus[resIndex].unread = "0";
-        ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
-        ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
-        $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
-        $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
-    }
-    else
-    {//初回ではない
-        let unread = 0;
-        ListStatus[resIndex].unread = "-1";
-        //使わなくなったが使えるように残す
-        // ListStatus[resIndex].tweetIdNext = resTweet[0].<%= setting.queryResTweetId %>;
-        $("#list_" + resIndex + "_Overview").html(resTweet[0].<%= setting.queryResOverview %>);
+    //successか
+    if (resResult == "<%= u_const.SUCCESS %>")
+    {//successである
+        //初回チェックか
+        if (trimError(ListStatus[resIndex].unread) == "")
+        {//初回である
+            ListStatus[resIndex].unread = "0";
+            ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
+            ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
+            $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+            $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
+        }
+        else
+        {//初回ではない
+            let unread = 0;
+            ListStatus[resIndex].unread = "before check";
+            //使わなくなったが使えるように残す
+            // ListStatus[resIndex].tweetIdNext = resTweet[0].<%= setting.queryResTweetId %>;
+            $("#list_" + resIndex + "_Overview").html(resTweet[0].<%= setting.queryResOverview %>);
 
-        //APIが戻したTweetをチェックするループ
-        for (let index = 0; index < resTweet.length; index++)
-        {
-            //既読TweetがAPIが戻したTweetにあったか
-            if (resTweet[index].<%= setting.queryResTweetId %> == ListStatus[resIndex].tweetId)
+            //APIが戻したTweetをチェックするループ
+            for (let index = 0; index < resTweet.length; index++)
             {
-                ListStatus[resIndex].unread = unread + "";
-                DEBUG("unread count: " + ListStatus[resIndex].unread);
-                break;
+                //既読TweetがAPIが戻したTweetにあったか
+                if (resTweet[index].<%= setting.queryResTweetId %> == ListStatus[resIndex].tweetId)
+                {
+                    ListStatus[resIndex].unread = unread + "";
+                    DEBUG("unread count: " + ListStatus[resIndex].unread);
+                    break;
+                }
+
+                unread++;
             }
 
-            unread++;
-        }
+            //既読Tweetがなかった(=未読数が10以上)か
+            if (ListStatus[resIndex].unread == "before check")
+            {
+                ListStatus[resIndex].unread = "*";
+                DEBUG("unread over index: " + resIndex);
+            }
 
-        //既読Tweetがなかった(=未読数が10以上)か
-        if (ListStatus[resIndex].unread == "-1")
-        {
-            ListStatus[resIndex].unread = "*";
-            DEBUG("unread over index: " + resIndex);
+            $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
         }
-
+    }
+    else
+    {//successではない
+        ListStatus[resIndex].unread += getUnread(ListStatus[resIndex].unread) == "E" ? "" : "E";
         $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
     }
 
@@ -146,9 +192,9 @@ function analyzeRes(data)
  * ajaxを呼び出す。
  * 同期化を考慮している。
  * (待たせる方)
- *
  * @constructor
  * @param {string} url ajaxの通信先
+ * @returns {Promise} インスタンス
  */
 function syncAjax(url)
 {
@@ -161,17 +207,18 @@ function syncAjax(url)
                     error:
                         /**
                         * ajax失敗コールバック
-                        *
                         * @constructor
                         */
-                        function()
+                        function(jqXHR, textStatus, errorThrown)
                         {
                             console.error("error no." + Index);
+                            console.error(jqXHR);
+                            console.error(textStatus);
+                            console.error(errorThrown);
                         },
                     success:
                         /**
                         * ajax成功コールバック
-                        *
                         * @constructor
                         * @param {object} data 受信データ
                         */
@@ -188,7 +235,6 @@ function syncAjax(url)
  * ajaxを呼び出す。
  * 同期化を考慮している。
  * (待つ方)
- *
  * @constructor
  */
 async function K_ajax()
@@ -214,8 +260,8 @@ async function K_ajax()
  * ajaxを使用して解析を行う。
  * 同期化を考慮している。
  * (待たせる方)
- *
  * @constructor
+ * @returns {Promise} インスタンス
  */
 function syncCheck()
 {
@@ -225,7 +271,6 @@ function syncCheck()
 		 * 同期化を考慮している。
 		 * 失敗した場合はajaxがエラー出力する。
 		 * (待たせる方)
-		 *
 		 * @constructor
 		 * @param resolve 成功コールバック
 		 * @param reject 失敗コールバック
@@ -244,7 +289,6 @@ function syncCheck()
  * ajaxを使用して解析を行う。
  * 同期化を考慮している。
  * (待つ方)
- *
  * @constructor
  */
 async function check()
@@ -256,28 +300,30 @@ async function check()
         for (let count = 0; count < <%= list.length %>; count++)
         {
             //リセットされているか
-            if (ListStatus[Index].reset == "true")
+            if (ListStatus[Index].reset == "<%= u_const.ON %>")
             {
-                ListStatus[Index].reset = "false";
+                ListStatus[Index].reset = "<%= u_const.OFF %>";
                 ListStatus[Index].unread = "";
                 ListStatus[Index].overview = "";
                 $("#list_" + Index + "_Unread").html(ListStatus[Index].unread);
                 $("#list_" + Index + "_Overview").html(ListStatus[Index].overview);
             }
 
+            let tmpUnread = trimError(ListStatus[Index].unread);
             //初回やチェック有効(=未読オーバーではない)であるか
-            if ((((ListStatus[Index].unread >= 0) && (ListStatus[Index].unread <= 9))) || (ListStatus[Index].unread == ""))
+            if ((((tmpUnread >= 0) && (tmpUnread <= 9))) || (tmpUnread == ""))
             {
                 //同期式でajaxを使ってチェック
                 await K_ajax();
 
                 $("#list_" + Index + "_CheckDatetime").html(Date().toLocaleString());
+                $("#lastcheck").attr("value", Date().toLocaleString());
             }
 
             Index = (Index + 1) % <%= list.length %>;
             
             //1回で全チェックしない設定か
-            if (!<%= setting.allatonce %>)
+            if (AllAtOnce == "<%= u_const.OFF %>")
             {
                 break;
             }
@@ -289,22 +335,21 @@ async function check()
 
 /**
  * 未読をリセットする。
- *
  * @constructor
  * @param {string} index 未読をリセットするリストNo.
  */
 function resetUnread(index)
 {
-    ListStatus[index].reset = "true";
+    ListStatus[index].reset = "<%= u_const.ON %>";
     DEBUG("unread reset index: " + index);
 }
 
 /**
  * 初期表示のタイトル文字列を作成する。
  * 視認性を上げるために区切りを入れることを考慮している。
- *
  * @constructor
  * @param {string} listLength リスト数
+ * @returns {string} 初期表示のタイトル文字列
  */
 function makeInitTitle(listLength)
 {
@@ -327,12 +372,13 @@ function makeInitTitle(listLength)
  * ・リスト状態
  * ・現チェックリストNo.
  * ・タイトル
- *
  * @constructor
  * @param {string} listLength リスト数
  */
 function initialize()
 {
+    Debug = "<%= setting.debug %>";
+    AllAtOnce = "<%= setting.allatonce %>";
     ListStatus = [];
 
     //リストごとの初期化を行うループ
@@ -344,7 +390,7 @@ function initialize()
                 tweetId: "",
                 tweetIdNext: "",
                 overview: "",
-                reset: "false"
+                reset: "<%= u_const.OFF %>"
             });
         open($("a#list_" + index + "_Url").text(), "tw_list_auto_checker_" + index);
     }
@@ -364,7 +410,8 @@ function initialize()
 td { white-space:nowrap; }
 </style>
 <form>
-    状態<input id="status" type="text" value="未通信" readonly>　チェック停止<input type="checkbox" id="ctrl">
+    チェック停止<input type="checkbox" id="ctrl"><br>
+    状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="40" readonly>
 </form>
 <table border="1">
     <tr>
