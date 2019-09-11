@@ -199,6 +199,13 @@ function analyzeRes(data)
 function syncAjax(url)
 {
 	return new Promise(
+		/**
+		 * ajaxを呼び出す。
+		 * 同期化を考慮している。
+		 * (待たせる方)
+		 * @param resolve 成功コールバック
+		 * @param reject 失敗コールバック
+		 */
 		function(resolve, reject)
 		{
             $.ajax(
@@ -206,8 +213,10 @@ function syncAjax(url)
                     url: url,
                     error:
                         /**
-                        * ajax失敗コールバック
-                        * @constructor
+                        * ajaxのerrorコールバック
+                        * @param {jqXHR} jqXHR ajaxから引用
+                        * @param {string} textStatus ajaxから引用
+                        * @param {string} errorThrown ajaxから引用
                         */
                         function(jqXHR, textStatus, errorThrown)
                         {
@@ -218,9 +227,8 @@ function syncAjax(url)
                         },
                     success:
                         /**
-                        * ajax成功コールバック
-                        * @constructor
-                        * @param {object} data 受信データ
+                        * ajaxのsuccessコールバック
+                        * @param {object} data ajaxから引用
                         */
                         function(data)
                         {
@@ -271,7 +279,6 @@ function syncCheck()
 		 * 同期化を考慮している。
 		 * 失敗した場合はajaxがエラー出力する。
 		 * (待たせる方)
-		 * @constructor
 		 * @param resolve 成功コールバック
 		 * @param reject 失敗コールバック
 		 */

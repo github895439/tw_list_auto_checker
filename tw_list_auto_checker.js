@@ -152,11 +152,10 @@ app.engine('ejs', ejs.renderFile);
 app.get('/',
 	/**
 	 * ツールページを返す。
-	 * @constructor
 	 * @param {object} req expressパッケージから引用
 	 * @param {object} res expressパッケージから引用
 	 */
-	function (req, res) {
+	function(req, res) {
 		res.render('main.ejs',
 			/**
 			 * ejs渡し初期化子
@@ -173,11 +172,10 @@ app.get('/',
 app.get('/jquery-3.4.1.js',
 	/**
 	 * jqueryファイルを返す。
-	 * @constructor
 	 * @param {object} req expressパッケージから引用
 	 * @param {object} res expressパッケージから引用
 	 */
-	function (req, res)
+	function(req, res)
 	{
 		res.send(fs.readFileSync("./script/jquery-3.4.1.js", "utf-8"));
 	});
@@ -207,21 +205,6 @@ function resultAPI(result, detail)
 }
 
 /**
- * twitter-node-clientパッケージのerrorコールバック
- * resolveはPromiseが特殊なために使えるのだろうか。。。
- * @constructor
- * @param err twitter-node-clientパッケージから引用
- * @param response twitter-node-clientパッケージから引用
- * @param body twitter-node-clientパッケージから引用
- */
-function doRequestErrorCallback(err, response, body)
-{
-	//TwitterAPIの結果一式
-	let ret = resultAPI(u_const.ERROR, [err, response, body]);
-	Promise.resolve(ret);
-}
-
-/**
  * TwitterAPIを呼び出す。
  * 同期化を考慮している。
  * (待たせる方)
@@ -237,17 +220,27 @@ function syncChild(twitterUrl)
 		 * 同期化を考慮している。
 		 * 失敗した場合はパッケージがエラー出力する。
 		 * (待たせる方)
-		 * @constructor
 		 * @param resolve 成功コールバック
 		 * @param reject 失敗コールバック
 		 */
 		function(resolve, reject)
 				{
-					client.doRequest(twitterUrl, doRequestErrorCallback,
+					client.doRequest(twitterUrl,
+						/**
+						 * twitter-node-clientパッケージのerrorコールバック
+						 * @param err twitter-node-clientパッケージから引用
+						 * @param response twitter-node-clientパッケージから引用
+						 * @param body twitter-node-clientパッケージから引用
+						 */
+						function(err, response, body)
+						{
+							//TwitterAPIの結果一式
+							let ret = resultAPI(u_const.ERROR, [err, response, body]);
+							Promise.resolve(ret);
+						},
 						/**
 						 * twitter-node-clientパッケージのsuccessコールバック
-						 * @constructor
-						 * @param data 受信データ
+						 * @param data twitter-node-clientパッケージから引用
 						 */
 						function(data)
 						{
@@ -264,11 +257,10 @@ app.get('/ajax/check',
 	 * TwitterAPIを呼び出す。
 	 * 同期化を考慮している。
 	 * (待つ方)
-	 * @constructor
 	 * @param {object} req expressパッケージから引用
 	 * @param {object} res expressパッケージから引用
 	 */
-	async function (req, res)
+	async function(req, res)
 	{
 		let url = req.url.split("?");
 		let query = qs.parse(url[1]);
