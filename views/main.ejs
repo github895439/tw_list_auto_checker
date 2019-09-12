@@ -43,10 +43,10 @@ var AllAtOnce;
 function DEBUG(str)
 {
     //デバッグモードか
-	if (Debug == "<%= u_const.ON %>")
-	{
-		console.debug("[DEBUG] " + str);
-	}
+    if (Debug == "<%= u_const.ON %>")
+    {
+        console.debug("[DEBUG] " + str);
+    }
 }
 
 /**
@@ -198,16 +198,16 @@ function analyzeRes(data)
  */
 function syncAjax(url)
 {
-	return new Promise(
-		/**
-		 * ajaxを呼び出す。
-		 * 同期化を考慮している。
-		 * (待たせる方)
-		 * @param resolve 成功コールバック
-		 * @param reject 失敗コールバック
-		 */
-		function(resolve, reject)
-		{
+    return new Promise(
+        /**
+         * ajaxを呼び出す。
+         * 同期化を考慮している。
+         * (待たせる方)
+         * @param resolve 成功コールバック
+         * @param reject 失敗コールバック
+         */
+        function(resolve, reject)
+        {
             $.ajax(
                 {
                     url: url,
@@ -235,8 +235,8 @@ function syncAjax(url)
                             resolve(data);
                         }
                 });
-		}
-	);
+        }
+    );
 }
 
 /**
@@ -273,23 +273,23 @@ async function K_ajax()
  */
 function syncCheck()
 {
-	return new Promise(
-		/**
-		 * ajaxを使用して解析を行う。
-		 * 同期化を考慮している。
-		 * 失敗した場合はajaxがエラー出力する。
-		 * (待たせる方)
-		 * @param resolve 成功コールバック
-		 * @param reject 失敗コールバック
-		 */
-		function(resolve, reject)
-		{
+    return new Promise(
+        /**
+         * ajaxを使用して解析を行う。
+         * 同期化を考慮している。
+         * 失敗した場合はajaxがエラー出力する。
+         * (待たせる方)
+         * @param resolve 成功コールバック
+         * @param reject 失敗コールバック
+         */
+        function(resolve, reject)
+        {
             //ajaxを使ってチェック
             K_ajax();
 
             resolve();
-		}
-	);
+        }
+    );
 }
 
 /**
