@@ -264,7 +264,7 @@ app.get('/ajax/check',
     {
         let url = req.url.split("?");
         let query = qs.parse(url[1]);
-        let twitterParams = {list_id: "", count: "", include_rts: "true"};
+        let twitterParams = {list_id: "", count: "", include_entities: "false", include_rts: "true"};
         twitterParams.list_id = list[query.index].id;
 
         //初回等のチェック状態分岐
