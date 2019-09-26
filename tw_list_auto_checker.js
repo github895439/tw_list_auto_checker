@@ -10,10 +10,10 @@ const jquery = require("jquery");
 const Twitter = require('twitter-node-client').Twitter;
 
 const app = express();
-const list = JSON.parse(fs.readFileSync("./data/list.json","utf-8"));
+const list = JSON.parse(fs.readFileSync("./data/list.json", "utf-8"));
 const u_const = JSON.parse(fs.readFileSync("./data/u_const.json", "utf-8"));
 const setting = JSON.parse(fs.readFileSync("./data/setting.json", "utf-8"));
-const client = new Twitter(JSON.parse(fs.readFileSync("./data/key.json","utf-8")));
+const client = new Twitter(JSON.parse(fs.readFileSync("./data/key.json", "utf-8")));
 
 /**
  * テスト用保持領域
@@ -236,7 +236,7 @@ function syncChild(twitterUrl)
                         {
                             //TwitterAPIの結果一式
                             let ret = resultAPI(u_const.ERROR, [err, response, body]);
-                            Promise.resolve(ret);
+                            resolve(ret);
                         },
                         /**
                          * twitter-node-clientパッケージのsuccessコールバック
