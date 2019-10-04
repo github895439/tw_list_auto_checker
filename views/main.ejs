@@ -139,7 +139,7 @@ function analyzeRes(data)
             ListStatus[resIndex].unread = "0";
             ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
             ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
-            $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+            $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
             $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
         }
         else
@@ -171,13 +171,13 @@ function analyzeRes(data)
                 DEBUG("unread over index: " + resIndex);
             }
 
-            $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+            $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
         }
     }
     else
     {//successではない
         ListStatus[resIndex].unread += getUnread(ListStatus[resIndex].unread) == "E" ? "" : "E";
-        $("#list_" + resIndex + "_Unread").html(ListStatus[resIndex].unread);
+        $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
     }
 
     let title = $("title").text();
@@ -312,7 +312,7 @@ async function check()
                 ListStatus[Index].reset = "<%= u_const.OFF %>";
                 ListStatus[Index].unread = "";
                 ListStatus[Index].overview = "";
-                $("#list_" + Index + "_Unread").html(ListStatus[Index].unread);
+                $("#list_" + Index + "_Unread").html("<b>" + ListStatus[Index].unread + "</b>");
                 $("#list_" + Index + "_Overview").html(ListStatus[Index].overview);
             }
 
