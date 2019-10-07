@@ -93,3 +93,9 @@ https://www.sejuku.net/blog/71663
 https://qiita.com/suin/items/97041d3e0691c12f4974
 - JSONにコメント  
 https://www.nxworld.net/tips/use-comment-in-json.html
+
+# 主な履歴
+2019/10/04　未読数を太字
+2019/09/09　初期表示で全リンクを表示
+2019/09/05　ソースにコメント追加
+2019/09/04　公開
