@@ -2,38 +2,144 @@
     "//": 
         {
             "debug": "ONにするとdebugログを出力する",
-            "port": "node.jsのWebポート",
             "checkIntervalMs": "tweetのチェック間隔(ms単位。1間隔で1リストを処理する。API制限は900アクセス/15分(=900秒)。)",
-            "urlBase": "node.jsのベースURL",
-            "urlCheck": "node.jsのチェックURL(ajaxから使用)",
-            "queryReqIndex": "チェックURLリクエストで使用するリスト番号のクエリーキーワード",
-            "queryReqFirst": "チェックURLリクエストで使用する初回判定のクエリーキーワード",
-            "queryResIndex": "チェックURLレスポンスで使用するリスト番号のプロパティ",
-            "queryResTwitterApiResult": "チェックURLレスポンスで使用するTwitterAPIの結果のプロパティ",
-            "queryResTweet": "チェックURLレスポンスで使用するtweet配列のプロパティ",
-            "queryResTweetId": "チェックURLレスポンスで使用するtweetIdのプロパティ",
-            "queryResOverview": "チェックURLレスポンスで使用するtweet概要のプロパティ",
-            "urlTwitterList": "リストTLを取得するTwitterAPI",
             "overviewLength": "最新概要に表示する長さ",
             "allatonce": "ONにすると1チェックで全リストをチェックする",
             "test": "ONにするとテストが実行される",
-            "testPattern": "テストが実行される場合のテストパターン"
+            "testPattern": "テストが実行される場合のテストパターン",
+            "nodejs": "node.js関連",
+            "checkIf": "チェックI/F関連",
+            "urlTwitterApi": "TwitterAPI関連",
+            "position": "タイトル内の位置関連"
         },
-    "debug": "OFF",
-    "port": "8080",
-    "checkIntervalMs": "10000",
-    "urlBase": "http://localhost",
-    "urlCheck": "/ajax/check",
-    "queryReqIndex": "index",
-    "queryReqFirst": "first",
-    "queryResIndex": "index",
-    "queryResTwitterApiResult": "result",
-    "queryResTweet": "tweet",
-    "queryResTweetId": "tweetId",
-    "queryResOverview": "overview",
-    "urlTwitterList": "/lists/statuses.json",
+    "debug": "ON",
     "overviewLength": "50",
-    "allatonce": "ON",
     "test": "OFF",
-    "testPattern": "1"
+    "testPattern": "1",
+    "me": "tw388192",
+    "notificationsOrder": ["MT", "RT", "FOLLOW"],
+    "nodejs":
+        {
+            "//":
+                {
+                    "port": "Webポート",
+                    "urlBase": "ベースURL",
+                    "urlCheck": "チェックURL(クライアントから使用)"
+                },
+            "port": "8080",
+            "urlBase": "http://localhost",
+            "urlCheck": "/ajax/check"
+        },
+    "checkIf":
+        {
+            "//":
+                {
+                    "req": "リクエスト関連",
+                    "res": "レスポンス関連"
+                },
+            "req":
+                {
+                    "//":
+                        {
+                            "index": "チェックURLリクエストで使用する初回判定のクエリーキーワード",
+                            "first": "チェックURLリクエストで使用するリスト番号のクエリーキーワード"
+                        },
+                    "index": "index",
+                    "first": "first"
+                },
+            "res":
+                {
+                    "//":
+                        {
+                            "index": "チェックURLレスポンスのチェックターゲットのプロパティ",
+                            "result": "チェックURLレスポンスの結果のプロパティ",
+                            "data": "チェックURLレスポンスのデータのプロパティ(チェックターゲットによって中身が異なる)",
+                            "list": "チェックURLレスポンスのデータプロパティに入るリスト関連のプロパティ",
+                            "mt": "チェックURLレスポンスのデータプロパティに入る返信関連のプロパティ",
+                            "rt": "チェックURLレスポンスのデータプロパティに入るRT関連のプロパティ",
+                            "follow": "チェックURLレスポンスのデータプロパティに入るフォロワー関連のプロパティ"
+                        },
+                    "index": "index",
+                    "result": "result",
+                    "data": "data",
+                    "list":
+                        {
+                            "//":
+                                {
+                                    "tweedId": "Tweet IDのプロパティ",
+                                    "overview": "概要のプロパティ"
+                                },
+                            "tweedId": "tweetId",
+                            "overview": "overview"
+                        },
+                    "mt":
+                        {
+                            "//":
+                                {
+                                    "tweedId": "Tweet IDのプロパティ"
+                                },
+                            "tweedId": "tweetId"
+                        },
+                    "rt":
+                        {
+                            "//":
+                                {
+                                    "tweedId": "Tweet IDのプロパティ",
+                                    "rtCount": "RT数のプロパティ"
+                                },
+                            "tweedId": "tweetId",
+                            "rtCount": "rtCount"
+                        }
+                }
+        },
+    "urlTwitterApi":
+        {
+            "//":
+                {
+                    "list": "リストTL取得関連",
+                    "mt": "返信一覧TL取得関連",
+                    "rt": "RT一覧TL取得関連",
+                    "follow": "フォロワー一覧TL取得関連"
+                },
+            "list":
+                {
+                    "//":
+                        {
+                            "url": "URL",
+                            "limit": "アクセス制限(1秒に1回(=15分で900回))"
+                        },
+                    "url": "/lists/statuses.json",
+                    "limit": 1
+                },
+            "mt":
+                {
+                    "//":
+                        {
+                            "url": "URL",
+                            "limit": "アクセス制限(12秒に1回(=15分で75回))"
+                        },
+                    "url": "/statuses/mentions_timeline.json",
+                    "limit": 12
+                },
+            "rt":
+                {
+                    "//":
+                        {
+                            "url": "URL",
+                            "limit": "アクセス制限(12秒に1回(=15分で75回))"
+                        },
+                    "url": "/statuses/retweets_of_me.json",
+                    "limit": 12
+                },
+            "follow":
+                {
+                    "//":
+                        {
+                            "url": "URL",
+                            "limit": "アクセス制限(60秒に1回(=15分で15回))"
+                        },
+                    "url": "/followers/ids.json",
+                    "limit": 60
+                }
+        }
 }

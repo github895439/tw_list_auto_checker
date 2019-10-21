@@ -9,11 +9,13 @@ const jquery = require("jquery");
  */
 const Twitter = require('twitter-node-client').Twitter;
 
-const app = express();
-const list = JSON.parse(fs.readFileSync("./data/list.json", "utf-8"));
-const u_const = JSON.parse(fs.readFileSync("./data/u_const.json", "utf-8"));
-const setting = JSON.parse(fs.readFileSync("./data/setting.json", "utf-8"));
-const client = new Twitter(JSON.parse(fs.readFileSync("./data/key.json", "utf-8")));
+const App = express();
+const List = JSON.parse(fs.readFileSync("./data/list.json", "utf-8"));
+const AppConst = JSON.parse(fs.readFileSync("./data/appconst.json", "utf-8"));
+const Setting = JSON.parse(fs.readFileSync("./data/setting.json", "utf-8"));
+const Client = new Twitter(JSON.parse(fs.readFileSync("./data/key.json", "utf-8")));
+
+Setting.notificationsOrder = JSON.stringify(Setting.notificationsOrder);
 
 /**
  * テスト用保持領域
@@ -28,10 +30,10 @@ var TestValue;
 function TESTINIT()
 {
     //テストモードであるか
-    if (setting.test == u_const.ON)
+    if (Setting.test == AppConst.ON)
     {
         //テストパターン分岐
-        switch (setting.testPattern)
+        switch (Setting.testPattern)
         {
             case "1":
             {//1
@@ -63,10 +65,10 @@ function TEST(src, reference)
     let ret;
 
     //テストモードであるか
-    if (setting.test == u_const.ON)
+    if (Setting.test == AppConst.ON)
     {//である
         //テストパターン分岐
-        switch (setting.testPattern)
+        switch (Setting.testPattern)
         {
             //indexが1、かつ、初回～3回目までをエラーにする
             case "1":
@@ -78,7 +80,7 @@ function TEST(src, reference)
                     if (TestValue <= 3)
                     {//である
                         //TwitterAPIの結果一式
-                        ret = resultAPI(u_const.ERROR, ["e(1)", "e(2)", "e" + TestValue]);
+                        ret = resultAPI(AppConst.ERROR, ["e(1)", "e(2)", "e" + TestValue]);
                     }
                     else
                     {//ではない
@@ -104,7 +106,7 @@ function TEST(src, reference)
                     if ((TestValue >= 3) && (TestValue <= 4))
                     {//である
                         //TwitterAPIの結果一式
-                        ret = resultAPI(u_const.ERROR, ["e(1)", "e(2)", "e" + TestValue]);
+                        ret = resultAPI(AppConst.ERROR, ["e(1)", "e(2)", "e" + TestValue]);
                     }
                     else
                     {//ではない
@@ -142,34 +144,49 @@ function TEST(src, reference)
  */
 function DEBUG(str)
 {
-    if (setting.debug == u_const.ON)
+    if (Setting.debug == AppConst.ON)
     {
         console.debug("[DEBUG] " + str);
     }
 }
 
-app.engine('ejs', ejs.renderFile);
-app.get('/',
+/**
+ * 致命的エラーで終了
+ * エラー情報を出力して終了する。
+ * @constructor
+ * @param {string} func 関数名
+ * @param {object} errorInfo エラー情報
+ */
+function fatal(func, errorInfo)
+{
+    console.log("function:" + func);
+    console.log(errorInfo);
+    process.exit();
+}
+
+App.engine('ejs', ejs.renderFile);
+App.get('/',
     /**
      * ツールページを返す。
      * @param {object} req expressパッケージから引用
      * @param {object} res expressパッケージから引用
      */
-    function(req, res) {
+    function(req, res)
+    {
         res.render('main.ejs',
             /**
              * ejs渡し初期化子
-             * @property {JSON} list 全リスト
-             * @property {JSON} u_const スペルミス防止定数
-             * @property {JSON} setting ツール設定
+             * @property {JSON} List 全リスト
+             * @property {JSON} AppConst スペルミス防止定数
+             * @property {JSON} Setting ツール設定
              */
             {
-                list: list,
-                u_const: u_const,
-                setting: setting
+                List: List,
+                AppConst: AppConst,
+                Setting: Setting
             });
     });
-app.get('/jquery-3.4.1.js',
+App.get('/jquery-3.4.1.js',
     /**
      * jqueryファイルを返す。
      * @param {object} req expressパッケージから引用
@@ -183,7 +200,7 @@ app.get('/jquery-3.4.1.js',
 /**
  * //TwitterAPIの結果一式(結果概要と結果詳細)
  * @constructor
- * @param {string} result "success" or "error"
+ * @param {string} result AppConst.SUCCESSかAppConst.ERROR
  * @param {array} detail 結果の詳細
  * @returns {object} 結果一式(結果概要と結果詳細)
  */
@@ -192,7 +209,7 @@ function resultAPI(result, detail)
     let ret =
         /**
          * //TwitterAPIの結果一式の初期化子
-         * @property {string}  result - "success" or "error"
+         * @property {string}  result - AppConst.SUCCESSかAppConst.ERROR
          * @property {array}  detail - 結果の詳細
          */
         {
@@ -206,13 +223,12 @@ function resultAPI(result, detail)
 
 /**
  * TwitterAPIを呼び出す。
- * 同期化を考慮している。
- * (待たせる方)
+ * 同期化している。
  * @constructor
  * @param {string} twitterUrl TwitterAPI
  * @returns {Promise} インスタンス
  */
-function syncChild(twitterUrl)
+function syncDoRequest(twitterUrl)
 {
     return new Promise(
         /**
@@ -224,39 +240,258 @@ function syncChild(twitterUrl)
          * @param reject 失敗コールバック
          */
         function(resolve, reject)
+        {
+            Client.doRequest(twitterUrl,
+                /**
+                 * twitter-node-clientパッケージのerrorコールバック
+                 * @param err twitter-node-clientパッケージから引用
+                 * @param response twitter-node-clientパッケージから引用
+                 * @param body twitter-node-clientパッケージから引用
+                 */
+                function(err, response, body)
                 {
-                    client.doRequest(twitterUrl,
-                        /**
-                         * twitter-node-clientパッケージのerrorコールバック
-                         * @param err twitter-node-clientパッケージから引用
-                         * @param response twitter-node-clientパッケージから引用
-                         * @param body twitter-node-clientパッケージから引用
-                         */
-                        function(err, response, body)
-                        {
-                            //TwitterAPIの結果一式
-                            let ret = resultAPI(u_const.ERROR, [err, response, body]);
-                            resolve(ret);
-                        },
-                        /**
-                         * twitter-node-clientパッケージのsuccessコールバック
-                         * @param data twitter-node-clientパッケージから引用
-                         */
-                        function(data)
-                        {
-                            //TwitterAPIの結果一式
-                            let ret = resultAPI(u_const.SUCCESS, [data]);
-                            resolve(ret);
-                        });
-                }
-    );
+                    //TwitterAPIの結果一式
+                    let ret = resultAPI(AppConst.ERROR, [err, response, body]);
+                    resolve(ret);
+                },
+                /**
+                 * twitter-node-clientパッケージのsuccessコールバック
+                 * @param data twitter-node-clientパッケージから引用
+                 */
+                function(data)
+                {
+                    //TwitterAPIの結果一式
+                    let ret = resultAPI(AppConst.SUCCESS, [data]);
+                    resolve(ret);
+                });
+        });
 }
 
-app.get('/ajax/check',
+/**
+ * URL(クエリー含む)を作るための材料を格納する。
+ * @constructor
+ * @param {object} query パースしたクエリー
+ * @returns {object} URL(クエリー含む)を作るための材料
+ */
+function setUrlMaterial(query)
+{
+    let ret = {};
+    let twitterParams;
+
+    //ターゲットがリストか
+    if (!isNaN(parseInt(query[Setting.checkIf.req.index])))
+    {//である
+        ret["url"] = Setting.urlTwitterApi["list"].url;
+        twitterParams =
+            {
+                "list_id": List[query[Setting.checkIf.req.index]].id,
+                "include_entities": "false",
+                "include_rts": "true"
+            };
+
+        //初回等のチェック状態分岐
+        switch (query[Setting.checkIf.req.first])
+        {
+            case AppConst.ON:
+            {//初回である
+                twitterParams["count"] = "1";
+                break;
+            }
+            case AppConst.OFF:
+            {//初回ではない
+                twitterParams["count"] = "10";
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, query[Setting.checkIf.req.first]);
+            }
+        }
+    }
+    else
+    {//ではない
+        //ターゲットで分岐
+        switch (query[Setting.checkIf.req.index])
+        {
+            case AppConst.MT:
+            {//返信
+                ret["url"] = Setting.urlTwitterApi["mt"].url;
+                twitterParams =
+                    {
+                        "trim_user": "true",
+                        "include_entities": "false"
+                    };
+
+                //初回等のチェック状態分岐
+                switch (query[Setting.checkIf.req.first])
+                {
+                    case AppConst.ON:
+                    {//初回である
+                        twitterParams["count"] = "1";
+                        break;
+                    }
+                    case AppConst.OFF:
+                    {//初回ではない
+                        twitterParams["count"] = "10";
+                        break;
+                    }
+                    default:
+                    {//他
+                        //機能的には起こらない
+                        fatal(arguments.callee.name, query[Setting.checkIf.req.first]);
+                    }
+                }
+    
+                break;
+            }
+            case AppConst.RT:
+            {//RT
+                ret["url"] = Setting.urlTwitterApi["rt"].url;
+                twitterParams =
+                    {
+                        "trim_user": "true",
+                        "include_entities": "false",
+                        "include_user_entities": "false"
+                    };
+
+                //初回等のチェック状態分岐
+                switch (query[Setting.checkIf.req.first])
+                {
+                    case AppConst.ON:
+                    {//初回である
+                        twitterParams["count"] = "1";
+                        break;
+                    }
+                    case AppConst.OFF:
+                    {//初回ではない
+                        twitterParams["count"] = "10";
+                        break;
+                    }
+                    default:
+                    {//他
+                        //機能的には起こらない
+                        fatal(arguments.callee.name, query[Setting.checkIf.req.first]);
+                    }
+                }
+    
+                break;
+            }
+            case AppConst.FOLLOW:
+            {//フォロー
+                ret["url"] = Setting.urlTwitterApi["follow"].url;
+                twitterParams = {"screen_name": Setting.me};
+    
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, query[Setting.checkIf.req.index]);
+            }
+        }
+    }
+
+    ret["params"] = twitterParams;
+    return ret;
+}
+
+/**
+ * TwitterAPIを呼び出す。
+ * 同期化している。
+ * @constructor
+ * @param {object} query パースしたクエリー
+ * @returns {object} TwitterAPIの結果
+ */
+async function callTwitterApi(query)
+{
+    //クエリーパラメーター格納
+    let material = setUrlMaterial(query);
+
+    let path = material["url"] + Client.buildQS(material["params"]);
+    let twitterUrl = Client.baseUrl + path;
+    //Twitterオブジェクトが出力するため不要
+    // DEBUG("twitterUrl: " + twitterUrl);
+
+    //TwitterAPI呼び出し
+    let ret = await syncDoRequest(twitterUrl);
+
+    return ret;
+}
+
+/**
+ * クライアントへのデータを格納する。
+ * @constructor
+ * @param {string} reqIndex ターゲット
+ * @param {JSON} resJson レスポンスのJSONパース
+ * @returns {object} クライアントへのデータ
+ */
+function setDataToClient(reqIndex, resJson)
+{
+    let ret = [];
+    DEBUG("from twitter 2: " + resJson.length);
+
+    //ターゲットがリストか
+    if (!isNaN(parseInt(reqIndex)))
+    {//である
+        //レスポンスをクライアントへのデータに格納するループ
+        for (let index = 0; index < resJson.length; index++)
+        {
+            let data = {};
+            data[Setting.checkIf.res.list.tweedId] = resJson[index].id;
+            data[Setting.checkIf.res.list.overview] = resJson[index].text.substr(0, Setting.overviewLength);
+            ret.push(data);
+        }
+    }
+    else
+    {//ではない
+        //ターゲットで分岐
+        switch (reqIndex)
+        {
+            case AppConst.MT:
+            {//返信
+                //レスポンスをクライアントへのデータに格納するループ
+                for (let index = 0; index < resJson.length; index++)
+                {
+                    let data = {};
+                    data[Setting.checkIf.res.mt.tweedId] = resJson[index].id;
+                    ret.push(data);
+                }
+
+                break;
+            }
+            case AppConst.RT:
+            {//RT
+                //レスポンスをクライアントへのデータに格納するループ
+                for (let index = 0; index < resJson.length; index++)
+                {
+                    let data = {};
+                    data[Setting.checkIf.res.rt.tweedId] = resJson[index].id;
+                    data[Setting.checkIf.res.rt.rtCount] = resJson[index].retweet_count;
+                    ret.push(data);
+                }
+
+                break;
+            }
+            case AppConst.FOLLOW:
+            {//フォロー
+                ret = resJson.ids;
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, index);
+            }
+        }
+    }
+
+    return ret;
+}
+
+App.get('/ajax/check',
     /**
      * TwitterAPIを呼び出す。
-     * 同期化を考慮している。
-     * (待つ方)
      * @param {object} req expressパッケージから引用
      * @param {object} res expressパッケージから引用
      */
@@ -264,79 +499,34 @@ app.get('/ajax/check',
     {
         let url = req.url.split("?");
         let query = qs.parse(url[1]);
-        let twitterParams = {list_id: "", count: "", include_entities: "false", include_rts: "true"};
-        twitterParams.list_id = list[query.index].id;
-
-        //初回等のチェック状態分岐
-        switch (query.first)
-        {
-            case u_const.ON:
-            {//初回
-                twitterParams.count = "1";
-                break;
-            }
-            default:
-            {//その他
-                twitterParams.count = "10";
-                break;
-            }
-        }
-
-        let path = setting.urlTwitterList + client.buildQS(twitterParams);
-        let twitterUrl = client.baseUrl + path;
-        //Twitterオブジェクトが出力するため不要
-        // DEBUG("twitterUrl: " + twitterUrl);
 
         //TwitterAPI呼び出し
-        let twitterRes = await syncChild(twitterUrl);
+        let twitterRes = await callTwitterApi(query);
 
-        twitterRes = TEST(twitterRes, [query.index, query.first])
+        twitterRes = TEST(twitterRes, [query[Setting.checkIf.req.index], query[Setting.checkIf.req.first]]);
         DEBUG("from twitter 1: " + twitterRes.result);
-        let tweet = [];
-
+        let data;
+    
         //successか
-        if (twitterRes.result == u_const.SUCCESS)
+        if (twitterRes.result == AppConst.SUCCESS)
         {//successである
-            let twitterResJson = JSON.parse(twitterRes.detail[0]);
-            DEBUG("from twitter 2: " + twitterResJson.length);
-
-            //受信したtweetをクライアント応答に埋め込むループ
-            for (let index = 0; index < twitterResJson.length; index++)
-            {
-                tweet.push(
-                    /**
-                     * クライアント応答のtweet分の初期化子
-                     * @property {string} tweetId tweet識別子
-                     * @property {string} overview tweet内容の概要
-                     */
-                    {
-                        tweetId: twitterResJson[index].id,
-                        overview: twitterResJson[index].text.substr(0, setting.overviewLength)
-                    }
-                );
-            }
+            //クライアントへのデータ格納
+            data = setDataToClient(query[Setting.checkIf.req.index], JSON.parse(twitterRes.detail[0]));
         }
         else
         {//successではない	
-            console.error(twitterRes.detail[2])
+            console.error(twitterRes.detail[2]);
+            data = twitterRes.detail[2];
         }
-
-        let resp =
-            /**
-             * クライアント応答の初期化子
-             * @property {string} index リストNo.
-             * @property {string} result TwitterAPIの結果.
-             * @property {JSON} tweet tweet
-             */
-            {
-                index: query.index,
-                result: twitterRes.result,
-                tweet: tweet
-            };				
-        let tmpResp = JSON.stringify(resp);
-        res.send(tmpResp);
-        DEBUG("to client: " + [resp.index, resp.result, resp.tweet.length].join(","));
+    
+        let tmpRes = {};
+        tmpRes[Setting.checkIf.res.index] = query[Setting.checkIf.req.index];
+        tmpRes[Setting.checkIf.res.result] = twitterRes.result;
+        tmpRes[Setting.checkIf.res.data] = data;
+        let tmpResJson = JSON.stringify(tmpRes);
+        res.send(tmpResJson);
+        DEBUG("to client: " + [tmpRes[Setting.checkIf.res.index], tmpRes[Setting.checkIf.res.result], (tmpRes[Setting.checkIf.res.data].hasOwnProperty("length") ? tmpRes[Setting.checkIf.res.data].hasOwnProperty("length") : "")].join(","));
     });	
 
 TESTINIT();
-app.listen(setting.port);
+App.listen(Setting.nodejs.port);

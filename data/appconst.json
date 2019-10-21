@@ -3,5 +3,9 @@
     "ON": "ON",
     "OFF": "OFF",
     "SUCCESS": "SUCCESS",
-    "ERROR": "ERROR"
+    "ERROR": "ERROR",
+    "LIST": "LIST",
+    "MT": "MT",
+    "RT": "RT",
+    "FOLLOW": "FOLLOW"
 }

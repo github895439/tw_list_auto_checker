@@ -6,14 +6,29 @@
 <script src="jquery-3.4.1.js"></script>
 <script>
 /**
- * リスト状態
+ * チェック状態
+ * 配列分はリスト、連想配列分は"<%= AppConst.MT %>"、"<%= AppConst.RT %>"、"<%= AppConst.FOLLOW %>"。
+ * 連想配列分はリセット手段が共通のため、"<%= AppConst.MT %>"にだけリセットがある。
+ * 下記のプロパティは全ての要素に常にあるわけではない。
  * @property {string}  unread - 0～9(未読数)、*(未読数が9を超える)、制御値
- * @property {string}  tweetId - 最新既読tweetId
+ * @property {string}  lastReadTweetId - 最新既読tweetId
  * @property {string}  tweetIdNext - 最新未読tweetId　→　使わなくなったが使えるように残す(未読オーバーするとチェックしなくなるため未読最新でなくなってしまう)
  * @property {string}  overview - 最新未読tweetText　→　tweetIdNext関連であまりあてにならない
  * @property {string}  reset - 未読リセット要求
+ * @property {string}  lastFollowerId - 最新フォロワーID
  */
-var ListStatus;
+var Target;
+
+/**
+ * ターゲットタイプの配列
+ * 順、アクセス制限値等。
+ * 各要素の下記のプロパティは全ての要素に常にあるわけではない。
+ * @property {string}  type - "<%= AppConst.LIST %>"か"<%= AppConst.MT %>"か""<%= AppConst.RT %>"か"<%= AppConst.FOLLOW %>"
+ * @property {string}  limit - アクセス制限値(何秒の1回がセーフペースか)
+ * @property {string}  lastCheckTime - 前回のチェック時間
+ * @property {string}  index - "<%= AppConst.LIST %>"の場合に次にチェックするターゲット
+ */
+ var TargetType;
 
 /**
  * 現チェックリストNo.
@@ -29,11 +44,10 @@ var Index;
 var Debug;
 
 /**
- * 一括モード
- * クライアントでデバッグしやすくするため
+ * タイトル内の"<%= AppConst.MT %>"、"<%= AppConst.RT %>"、"<%= AppConst.FOLLOW %>"の位置
  * @static
  */
-var AllAtOnce;
+var NotificationsOrder;
 
 /**
  * デバッグ動作ラッパー
@@ -43,157 +57,511 @@ var AllAtOnce;
 function DEBUG(str)
 {
     //デバッグモードか
-    if (Debug == "<%= u_const.ON %>")
+    if (Debug == "<%= AppConst.ON %>")
     {
-        console.debug("[DEBUG] " + str);
+        console.debug("[DEBUG]" + str);
     }
 }
 
 /**
- * エラー状態をトリムする。
+ * 致命的エラーで終了
+ * エラー情報を出力して終了する。
+ * (throwでお試し)
  * @constructor
- * @param {string} unread 未読数
- * @returns {string} 未読数(エラー状態無し)
+ * @param {string} func 関数名
+ * @param {object} errorInfo エラー情報
  */
-function trimError(unread)
+function fatal(func, errorInfo)
 {
-    let ret = unread.replace("E", "");
-    return ret;
+    console.error("function:" + func);
+    console.error(errorInfo);
+    throw arguments.callee.name;
 }
 
 /**
  * ajaxのクエリを作成する。
  * 要素の増減等に対応しやすくすることを考慮している。
  * @constructor
- * @param {string} index チェックするリストNo.
+ * @param {number} index ターゲットタイプのインデックス
  * @returns {string} 作成したajaxクエリ
  */
 function makeQuery(index)
 {
     let ret = "";
-    let query = new Map();
-    query.set("<%= setting.queryReqIndex %>", index);
-    query.set("<%= setting.queryReqFirst %>", (trimError(ListStatus[index].unread) == "") ? "<%= u_const.ON %>" : "<%= u_const.OFF %>");
+    let query = {};
+
+    //indexが無効か
+    if (!TargetType.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        query["<%= Setting.checkIf.req.index %>"] = TargetType[index].index;
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        query["<%= Setting.checkIf.req.index %>"] = TargetType[index].type;
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
+
+    //エラー情報除去
+    let unread = getUnreadByTargetTypeIndex(index, "<%= AppConst.ON %>");
+
+    //初回か
+    if (unread == "")
+    {//である
+        query["<%= Setting.checkIf.req.first %>"] = "<%= AppConst.ON %>"
+    }
+    //リセットか
+    else if (unread == "?")
+    {//である
+        query["<%= Setting.checkIf.req.first %>"] = "<%= AppConst.ON %>"
+    }
+    else
+    {//ではない
+        query["<%= Setting.checkIf.req.first %>"] = "<%= AppConst.OFF %>"
+    }
 
     //全要素を連結するループ
-    for (var key of query.keys())
+    for (let key of Object.keys(query))
     {
-        ret += key + "=" + query.get(key) + "&";
+        ret += key + "=" + query[key] + "&";
     }
 
     ret = ret.substr(0, ret.length - 1);
+    ret = "?" + ret;
     return ret;
 }
 
 /**
- * 未読数を取得する。
+ * ターゲットインデックスから未読数を取得する。
  * エラーの場合は「E」になる。
- * successかerrorで到達するため、引き数は「""」にはならない。
+ * エラーをトリムする場合はtrimError引数に"<%= AppConst.ON %>"を指定し、戻り値は今回の更新前の未読数になる。
  * @constructor
- * @param {string} unread 元値
- * @returns {string} 未読数(エラー状態は「E」)
+ * @param {object} index ターゲットのインデックス
+ * @param {string} trimError エラー状態をトリムする指定(省略可)
+ * @returns {string} 未読数
  */
-function getUnread(unread)
+ //#
+ function getUnreadByTargetIndex(index, trimError = "<%= AppConst.OFF %>")
 {
-    let ret = unread.charAt(unread.length - 1);
+    let ret;
+    let unread;
+
+    //indexが無効か
+    if (!Target.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    unread = Target[index].unread;
+
+    //エラーをトリムするか
+    if (trimError == "<%= AppConst.ON %>")
+    {//する
+        ret = unread.replace("E", "");
+    }
+    else
+    {//しない(エラー状態の場合は「E」になる)
+        ret = unread.charAt(unread.length - 1);
+    }
+
     return ret;
 }
 
 /**
- * 未読数を設定したタイトル文字列を作成する。
+ * ターゲットタイプインデックスから未読数を取得する。
+ * ターゲットタイプがリストの場合は現在のインデックスが対象となる。
+ * エラーの場合は「E」になる。
+ * エラーをトリムする場合はtrimError引数に"<%= AppConst.ON %>"を指定し、戻り値は今回の更新前の未読数になる。
+ * @constructor
+ * @param {number} index ターゲットタイプのインデックス
+ * @param {string} trimError エラー状態をトリムする指定(省略可)
+ * @returns {string} 未読数
+ */
+ //#
+function getUnreadByTargetTypeIndex(index, trimError = "<%= AppConst.OFF %>")
+{
+    let ret;
+
+    //indexが無効か
+    if (!TargetType.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        ret = getUnreadByTargetIndex(TargetType[index].index, trimError);
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        ret = getUnreadByTargetIndex(TargetType[index].type, trimError);
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
+
+    return ret;
+}
+
+/**
+ * タイトルにターゲットインデックスで指定されたターゲットのチェック状況を表示する。
  * 区切り文字があることを考慮している。
  * @constructor
- * @param {string} title 現在のタイトル文字列
- * @param {string} index 未読数を設定するリストNo.
- * @returns {string} 未読数を設定したタイトル文字列
+ * @param {object} index ターゲットのインデックス
  */
-function setTitle(title, index)
+ function setTitleByTargetIndex(index)
 {
-    let count = index * 1 + 1;
-    let arrayTitle = Array.from(title);
-    let tmpIndex = count + Math.floor(count / 4) - (count % 4 == 0 ? 1 : 0);
-    arrayTitle[tmpIndex - 1] = getUnread(ListStatus[index].unread);
-    let ret = arrayTitle.join("");
+    let arrayTitle = Array.from($("title").text());
+
+    //indexが無効か
+    if (!Target.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    //ターゲットがリストか
+    if (!isNaN(index))
+    {//である
+        let count = index * 1 + 1;
+        let tmpIndex = count + Math.floor(count / 4) - (count % 4 == 0 ? 1 : 0);
+
+        //未読数取得
+        let char = getUnreadByTargetIndex(index);
+
+        arrayTitle[tmpIndex - 1] = char;
+    }
+    else
+    {//ではない
+        //未読数取得
+        let char = getUnreadByTargetIndex(index);
+
+        arrayTitle[arrayTitle.length + NotificationsOrder[index]] = char;
+    }
+
+    $("title").text(arrayTitle.join(""));
+}
+
+/**
+ * タイトルにターゲットタイプインデックスで指定されたターゲットのチェック状況を表示する。
+ * ターゲットタイプがリストの場合は現在のリストのインデックスが対象となる。
+ * 区切り文字があることを考慮している。
+ * @constructor
+ * @param {number} index ターゲットタイプのインデックス
+ */
+function setTitleByTargetTypeIndex(index)
+{
+    //indexが無効か
+    if (!TargetType.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        setTitleByTargetIndex(TargetType[index].index);
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ではない
+        setTitleByTargetIndex(TargetType[index].type);
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
+}
+
+/**
+ * tableタグにチェック状況を表示する。
+ * ターゲットタイプがリストの場合は現在のインデックスが対象となる。
+ * @constructor
+ * @param {number} index ターゲットタイプのインデックス
+ */
+function setTableTag(index)
+{
+    //indexが無効か
+    if (!TargetType.hasOwnProperty(index))
+    {
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
+
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        $("#list_" + TargetType[index].index + "_Unread").html("<b>" + Target[TargetType[index].index].unread + "</b>");
+        $("#list_" + TargetType[index].index + "_Overview").html(Target[TargetType[index].index].overview);
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        $("#list_" + TargetType[index].type + "_Unread").html("<b>" + Target[TargetType[index].type].unread + "</b>");
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
+}
+
+/**
+ * indexがリストの場合に数値に変換
+ * @constructor
+ * @param {string} index ターゲット
+ * @returns {number} indexの数値
+ */
+function convertForList(index)
+{
+    let ret = parseInt(index);
+
+    //数値に変換できないか
+    if (isNaN(ret))
+    {
+        ret = index;
+    }
+
     return ret;
 }
 
 /**
- * ajaxの応答を解析する。
+ * チェック状態を格納する。(初回)
  * @constructor
- * @param {object} data ajaxの応答
+ * @param {object} resIndex ターゲット
+ * @param {object} resData レスポンスデータ
  */
-function analyzeRes(data)
+function setDataFirst(resIndex, resData)
 {
-    let res = JSON.parse(data);
-    let resIndex = res.<%= setting.queryResIndex %>
-    let resResult = res.<%= setting.queryResTwitterApiResult %>
-    let resTweet = res.<%= setting.queryResTweet %>
-    DEBUG("from node.js: " + [resIndex, resResult, resTweet.length].join(","));
+    Target[resIndex].unread = "0";
+    $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
 
-    //successか
-    if (resResult == "<%= u_const.SUCCESS %>")
-    {//successである
-        //初回チェックか
-        if (trimError(ListStatus[resIndex].unread) == "")
-        {//初回である
-            ListStatus[resIndex].unread = "0";
-            ListStatus[resIndex].tweetId = resTweet[0].<%= setting.queryResTweetId %>;
-            ListStatus[resIndex].overview = resTweet[0].<%= setting.queryResOverview %>;
-            $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
-            $("#list_" + resIndex + "_Overview").html(ListStatus[resIndex].overview);
+    //ターゲットがリストか
+    if (!isNaN(resIndex))
+    {//である
+        Target[resIndex].lastReadTweetId = resData[0].<%= Setting.checkIf.res.list.tweedId %>;
+        Target[resIndex].overview = resData[0].<%= Setting.checkIf.res.list.overview %>;
+        $("#list_" + resIndex + "_Overview").html(Target[resIndex].overview);
+    }
+    else
+    {//ではない
+        //ターゲットで分岐
+        switch (resIndex)
+        {
+            case "<%= AppConst.MT %>":
+            {//返信
+                Target[resIndex].lastReadTweetId = resData[0].<%= Setting.checkIf.res.mt.tweedId %>;
+                break;
+            }
+            case "<%= AppConst.RT %>":
+            {//RT
+                Target[resIndex].lastReadTweetId = resData[0].<%= Setting.checkIf.res.rt.tweedId %>;
+                Target[resIndex].rtCount = resData[0].<%= Setting.checkIf.res.rt.rtCount %>;
+                break;
+            }
+            case "<%= AppConst.FOLLOW %>":
+            {//フォロー
+                Target[resIndex].follower = resData;
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, resIndex);
+                break;
+            }
         }
-        else
-        {//初回ではない
-            let unread = 0;
-            ListStatus[resIndex].unread = "before check";
-            //使わなくなったが使えるように残す
-            // ListStatus[resIndex].tweetIdNext = resTweet[0].<%= setting.queryResTweetId %>;
-            $("#list_" + resIndex + "_Overview").html(resTweet[0].<%= setting.queryResOverview %>);
+    }
+}
 
-            //APIが戻したTweetをチェックするループ
-            for (let index = 0; index < resTweet.length; index++)
+/**
+ * チェック状態を格納する。(初回後)
+ * @constructor
+ * @param {object} resIndex ターゲット
+ * @param {object} resTweet レスポンスデータ
+ */
+function setDataNext(resIndex, resData)
+{
+    let unread = 0;
+    Target[resIndex].unread = "before check";
+
+    //ターゲットがリストか
+    if (!isNaN(resIndex))
+    {//である
+        $("#list_" + resIndex + "_Overview").html(resData[0].<%= Setting.checkIf.res.list.overview %>);
+
+        //APIが戻したTweetをチェックするループ
+        for (let index = 0; index < resData.length; index++)
+        {
+            //既読TweetがAPIが戻したTweetにあったか
+            if (resData[index].<%= Setting.checkIf.res.list.tweedId %> == Target[resIndex].lastReadTweetId)
             {
-                //既読TweetがAPIが戻したTweetにあったか
-                if (resTweet[index].<%= setting.queryResTweetId %> == ListStatus[resIndex].tweetId)
+                Target[resIndex].unread = unread + "";
+                DEBUG("unread count: " + Target[resIndex].unread);
+                break;
+            }
+
+            unread++;
+        }
+    }
+    else
+    {//ではない
+        //ターゲットで分岐
+        switch (resIndex)
+        {
+            case "<%= AppConst.MT %>":
+            {//返信
+                //APIが戻したTweetをチェックするループ
+                for (let index = 0; index < resData.length; index++)
                 {
-                    ListStatus[resIndex].unread = unread + "";
-                    DEBUG("unread count: " + ListStatus[resIndex].unread);
-                    break;
+                    //既読TweetがAPIが戻したTweetにあったか
+                    if (resData[index].<%= Setting.checkIf.res.mt.tweedId %> == Target[resIndex].lastReadTweetId)
+                    {
+                        Target[resIndex].unread = unread + "";
+                        DEBUG("unread count: " + Target[resIndex].unread);
+                        break;
+                    }
+
+                    unread++;
                 }
 
-                unread++;
+                break;
             }
+            case "<%= AppConst.RT %>":
+            {//RT
+                //APIが戻したTweetをチェックするループ
+                for (let index = 0; index < resData.length; index++)
+                {
+                    //既読TweetがAPIが戻したTweetにあったか
+                    if ((resData[index].<%= Setting.checkIf.res.rt.tweedId %> == Target[resIndex].lastReadTweetId) &&
+                         (resData[index].<%= Setting.checkIf.res.rt.rtCount %> == Target[resIndex].rtCount))
+                    {
+                        Target[resIndex].unread = unread + "";
+                        DEBUG("unread count: " + Target[resIndex].unread);
+                        break;
+                    }
 
-            //既読Tweetがなかった(=未読数が10以上)か
-            if (ListStatus[resIndex].unread == "before check")
-            {
-                ListStatus[resIndex].unread = "*";
-                DEBUG("unread over index: " + resIndex);
+                    unread++;
+                }
+
+                break;
             }
+            case "<%= AppConst.FOLLOW %>":
+            {//フォロー
+                //APIが戻したフォロワーをチェックするループ
+                for (let index = 0; index < resData.length; index++)
+                {
+                    //フォロワーが前回に含まれていないか
+                    if (!Target[resIndex].follower.includes(resData[index]))
+                    {
+                        unread++;
+                    }
 
-            $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
+                    //未読オーバーではないか
+                    if (unread <= 9)
+                    {
+                        Target[resIndex].unread = unread + "";
+                        DEBUG("unread count: " + Target[resIndex].unread);
+                    }
+                }
+
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, resIndex);
+                break;
+            }
+        }
+    }
+
+    //既読Tweetがなかった(=未読数が10以上)か
+    if (Target[resIndex].unread == "before check")
+    {
+        Target[resIndex].unread = "*";
+        DEBUG("unread over index: " + resIndex);
+    }
+
+    $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
+}
+
+/**
+ * ajaxのレスポンスを解析する。
+ * @constructor
+ * @param {object} ajaxRes ajaxのレスポンス
+ */
+function analyzeRes(ajaxRes)
+{
+    let res = JSON.parse(ajaxRes);
+
+    //リスト分を数値に変換
+    res.<%= Setting.checkIf.res.index %> = convertForList(res.<%= Setting.checkIf.res.index %>);
+
+    let resIndex = res.<%= Setting.checkIf.res.index %>;
+    let resResult = res.<%= Setting.checkIf.res.result %>;
+    let resData = res.<%= Setting.checkIf.res.data %>;
+    DEBUG("from node.js: " + [resIndex, resResult, resData.length].join(","));
+
+    //未読数取得
+    let unread = getUnreadByTargetIndex(resIndex, "<%= AppConst.ON %>");
+
+    //successか
+    if (resResult == "<%= AppConst.SUCCESS %>")
+    {//successである
+        //初回か
+        if (unread == "")
+        {//初回である
+            //初回データ格納
+            setDataFirst(resIndex, resData);
+        }
+        //リセットか
+        else if (unread == "?")
+        {
+            //初回データ格納
+            setDataFirst(resIndex, resData);
+        }
+        else
+        {//他
+            //初回後データ格納
+            setDataNext(resIndex, resData);
         }
     }
     else
     {//successではない
-        ListStatus[resIndex].unread += getUnread(ListStatus[resIndex].unread) == "E" ? "" : "E";
-        $("#list_" + resIndex + "_Unread").html("<b>" + ListStatus[resIndex].unread + "</b>");
+        console.error(resData);
+        Target[resIndex].unread = unread + "E";
+        $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
     }
 
-    let title = $("title").text();
-
-    //未読数をタイトルに設定
-    let tmpTitle = setTitle(title, resIndex);
-
-    $("title").text(tmpTitle);
+    //タイトルにチェック状況表示
+    setTitleByTargetIndex(resIndex);
 }
 
 /**
  * ajaxを呼び出す。
- * 同期化を考慮している。
- * (待たせる方)
+ * 同期化している。
  * @constructor
- * @param {string} url ajaxの通信先
+ * @param {string} url ajaxのアクセス先
  * @returns {Promise} インスタンス
  */
 function syncAjax(url)
@@ -232,123 +600,231 @@ function syncAjax(url)
                         */
                         function(data)
                         {
+                            DEBUG("ajax success");
                             resolve(data);
                         }
                 });
-        }
-    );
+        });
 }
 
 /**
  * ajaxを呼び出す。
- * 同期化を考慮している。
- * (待つ方)
+ * 同期化している。
  * @constructor
+ * @param {number} index ターゲットタイプのインデックス
  */
-async function K_ajax()
+async function callAjax(index)
 {
     //ajaxクエリ作成
-    let query = makeQuery(Index);
+    let query = makeQuery(index);
 
-    let url = "<%= setting.urlBase %>" + ":" + "<%= setting.port %>" + "<%= setting.urlCheck %>";
-    url += "?" + query;
+    let url = "<%= Setting.nodejs.urlBase %>" + ":" + "<%= Setting.nodejs.port %>" + "<%= Setting.nodejs.urlCheck %>";
+    url += query;
     DEBUG("ajax: " + url);
-    $("#status").attr("value", "No." + Index + " チェック中");
+    $("#status").attr("value", (TargetType[index].type == "<%= AppConst.LIST %>" ? TargetType[index].index : TargetType[index].type) + " チェック中");
 
     //同期ajax
     let ajaxRes = await syncAjax(url);
 
     $("#status").attr("value", "未通信");
 
-    //ajaxの応答解析
+    //ajaxのレスポンス解析
     analyzeRes(ajaxRes);
 }
 
 /**
- * ajaxを使用して解析を行う。
- * 同期化を考慮している。
- * (待たせる方)
+ * アクセス制限中か判断する。
  * @constructor
- * @returns {Promise} インスタンス
+ * @param {number} index ターゲットタイプのインデックス
+ * @returns {bool} 判断結果(true:いずれアクセス制限される等からアクセスすべきではない、false:それ以外))
  */
-function syncCheck()
+function isAccessLimit(index)
 {
-    return new Promise(
-        /**
-         * ajaxを使用して解析を行う。
-         * 同期化を考慮している。
-         * 失敗した場合はajaxがエラー出力する。
-         * (待たせる方)
-         * @param resolve 成功コールバック
-         * @param reject 失敗コールバック
-         */
-        function(resolve, reject)
-        {
-            //ajaxを使ってチェック
-            K_ajax();
+    let ret = false;
+    let now = Date.now();
 
-            resolve();
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        //既にリストを呼び出し済みか、制限されるペースか
+        if (now - TargetType[index].lastCheckTime <= TargetType[index].limit * 1000)
+        {
+            ret = true;
         }
-    );
+    }
+    else
+    {//ではない
+        //ターゲットタイプがあるか
+        if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+        {//ある
+            //制限されるペースか
+            if (now - TargetType[index].lastCheckTime <= TargetType[index].limit * 1000)
+            {
+                ret = true;
+            }
+        }
+        else
+        {//ない
+            //機能的には起こらない
+            fatal(arguments.callee.name, TargetType[index].type);
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * リセット状態を取得する。
+ * ターゲットタイプがリストの場合は現在のリストのインデックスが対象となる。
+ * @constructor
+ * @param {number} index ターゲットタイプのインデックス
+ * @returns {string} "<%= AppConst.ON %>" or "<%= AppConst.OFF %>"
+ */
+function getReset(index)
+{
+    let ret;
+
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        ret = Target[TargetType[index].index].reset;
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        ret = Target["<%= AppConst.MT %>"].reset;
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
+
+    return ret;
+}
+
+/**
+ * リセットする。
+ * ターゲットタイプがリストの場合は現在のリストのインデックスが対象となる。
+ * @constructor
+ * @param {number} index ターゲットタイプのインデックス
+ */
+function setReset(index)
+{
+    //ターゲットタイプがリストか
+    if (TargetType[index].type == "<%= AppConst.LIST %>")
+    {//である
+        Target[TargetType[index].index].reset = "<%= AppConst.OFF %>";
+        Target[TargetType[index].index].unread = "?";
+        Target[TargetType[index].index].overview = "";
+    }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        Target["<%= AppConst.MT %>"].reset = "<%= AppConst.OFF %>";
+
+        //通知を全てリセットするループ
+        for (let key of Object.keys(NotificationsOrder))
+        {
+            Target[key].unread = "?";
+        }
+    }
+    else
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
+    }
 }
 
 /**
  * ajaxを使用して解析を行う。
- * 同期化を考慮している。
- * (待つ方)
  * @constructor
  */
 async function check()
 {
+    let tmpTitle = $("title").text();
+    $("title").text(tmpTitle.includes("|") ? tmpTitle.replace("|", "-") : tmpTitle.replace("-", "|"));
+
     //画面でチェック停止されていないか
     if (!$("#ctrl").prop("checked"))
     {
-        //全リストのループ
-        for (let count = 0; count < <%= list.length %>; count++)
+        //全ターゲットタイプのループ
+        for (let index = 0; index < TargetType.length; index++)
         {
+            //アクセス制限判定
+            let tmpIsAccessLimit = isAccessLimit(index);
+
+            //アクセス制限になりえるか
+            if (tmpIsAccessLimit)
+            {
+                continue;
+            }
+
+            //リセット状態取得
+            let reset = getReset(index);
+
             //リセットされているか
-            if (ListStatus[Index].reset == "<%= u_const.ON %>")
+            if (reset == "<%= AppConst.ON %>")
             {
-                ListStatus[Index].reset = "<%= u_const.OFF %>";
-                ListStatus[Index].unread = "";
-                ListStatus[Index].overview = "";
-                $("#list_" + Index + "_Unread").html("<b>" + ListStatus[Index].unread + "</b>");
-                $("#list_" + Index + "_Overview").html(ListStatus[Index].overview);
+                //リセット
+                setReset(index);
+
+                //tableタグにチェック状況表示
+                setTableTag(index);
+
+                //タイトルにチェック状況表示
+                setTitleByTargetTypeIndex(index);
             }
 
-            let tmpUnread = trimError(ListStatus[Index].unread);
-            //初回やチェック有効(=未読オーバーではない)であるか
-            if ((((tmpUnread >= 0) && (tmpUnread <= 9))) || (tmpUnread == ""))
+            //未読数取得
+            let tmpUnread = getUnreadByTargetTypeIndex(index, "<%= AppConst.ON %>");
+
+            //初回か、チェック有効(=未読オーバーではない)か、リセットであるか
+            if ((((tmpUnread >= 0) && (tmpUnread <= 9))) || (tmpUnread == "") || (tmpUnread == "?"))
             {
+                TargetType[index].lastCheckTime = Date.now();
+
                 //同期式でajaxを使ってチェック
-                await K_ajax();
+                await callAjax(index);
 
-                $("#list_" + Index + "_CheckDatetime").html(Date().toLocaleString());
-                $("#lastcheck").attr("value", Date().toLocaleString());
-            }
+                let tmpDate = new Date();
+                $("#lastcheck").attr("value", tmpDate.toLocaleString());
 
-            Index = (Index + 1) % <%= list.length %>;
-            
-            //1回で全チェックしない設定か
-            if (AllAtOnce == "<%= u_const.OFF %>")
-            {
-                break;
+                //ターゲットがリストか
+                if (TargetType[index].type == "<%= AppConst.LIST %>")
+                {
+                    TargetType[index].index = (TargetType[index].index + 1) % <%= List.length %>;
+                }
             }
         }
     }
 
-    setTimeout(check, <%= setting.checkIntervalMs %>);
+    setTimeout(check, 2000);
 }
 
 /**
  * 未読をリセットする。
  * @constructor
- * @param {string} index 未読をリセットするリストNo.
+ * @param {string} index 未読をリセットするターゲット
  */
 function resetUnread(index)
 {
-    ListStatus[index].reset = "<%= u_const.ON %>";
-    DEBUG("unread reset index: " + index);
+    //リストか
+    if (!isNaN(index))
+    {//である
+        Target[index].reset = "<%= AppConst.ON %>";
+        DEBUG("unread reset index: " + index);
+    }
+    else if (index == "notifications")
+    {//である
+        Target["<%= AppConst.MT %>"].reset = "<%= AppConst.ON %>";
+        DEBUG("unread reset notifications");
+    }
+    else
+    {//他
+        //機能的には起こらない
+        fatal(arguments.callee.name, index);
+    }
 }
 
 /**
@@ -356,11 +832,22 @@ function resetUnread(index)
  * 視認性を上げるために区切りを入れることを考慮している。
  * @constructor
  * @param {string} listLength リスト数
+ * @param {string} notificationsOrderLength 通知数
  * @returns {string} 初期表示のタイトル文字列
  */
-function makeInitTitle(listLength)
+function makeInitTitle(listLength, notificationsOrderLength)
 {
-    let tmpListLength = listLength + Math.floor(listLength / 4) - (listLength % 4 == 0 ? 1 : 0);
+    let tmpListLength;
+
+    //リスト分
+    tmpListLength = listLength + Math.floor(listLength / 4) - (listLength % 4 == 0 ? 1 : 0);　
+
+    //「:」分
+    tmpListLength += 1;　
+
+    //"<%= AppConst.MT %>"、"<%= AppConst.RT %>"、"<%= AppConst.FOLLOW %>"分
+    tmpListLength += notificationsOrderLength;　
+
     let tmpStr = "?".repeat(tmpListLength);
     let arrayStr = Array.from(tmpStr);
 
@@ -370,45 +857,121 @@ function makeInitTitle(listLength)
         arrayStr[index] = " ";
     }
 
+    arrayStr[arrayStr.length - 1 - notificationsOrderLength] = ":";
     let ret = arrayStr.join("");
     return ret;
 }
 
 /**
- * 下記を初期化する。
- * ・リスト状態
- * ・現チェックリストNo.
- * ・タイトル
+ * 初期化
  * @constructor
- * @param {string} listLength リスト数
  */
 function initialize()
 {
-    Debug = "<%= setting.debug %>";
-    AllAtOnce = "<%= setting.allatonce %>";
-    ListStatus = [];
+    Debug = "<%= Setting.debug %>";
+    Target = [];
+
+    open($("a#notifications_Url").text(), "tw_list_auto_checker_notiications");
 
     //リストごとの初期化を行うループ
-    for (let index = 0; index < <%= list.length %>; index++)
+    for (let index = 0; index < <%= List.length %>; index++)
     {
-        ListStatus.push(
+        Target.push(
             {
                 unread: "",
-                tweetId: "",
+                lastReadTweetId: "",
                 tweetIdNext: "",
                 overview: "",
-                reset: "<%= u_const.OFF %>"
+                reset: "<%= AppConst.OFF %>"
             });
         open($("a#list_" + index + "_Url").text(), "tw_list_auto_checker_" + index);
     }
 
+    Target["<%= AppConst.MT %>"] =
+        {
+            unread: "",
+            lastReadTweetId: "",
+            reset: "<%= AppConst.OFF %>"
+        };
+    Target["<%= AppConst.RT %>"] =
+        {
+            unread: "",
+            lastReadTweetId: "",
+            rtCount: ""
+        };
+    Target["<%= AppConst.FOLLOW %>"] =
+        {
+            unread: "",
+            follower: []
+        };
     Index = 0;
+    let tmpNotificationsOrder = <%- Setting.notificationsOrder %>;
+    NotificationsOrder = {};
+
+    //リスト以外のターゲットのタイトル位置を格納するループ
+    for (let index = 0; index < tmpNotificationsOrder.length; index++)
+    {
+        NotificationsOrder[tmpNotificationsOrder[index]] = (tmpNotificationsOrder.length - index) * (-1);
+    }
+
+    TargetType = [];
+
+    //リストがあるか
+    if (<%= List.length %> > 0)
+    {
+        TargetType.push(
+            {
+                type: "<%= AppConst.LIST %>",
+                limit: <%= Setting.urlTwitterApi.list.limit %>,
+                lastCheckTime: 0,
+                index: 0
+            });
+    }
+
+    //ターゲットタイプに通知分を格納するループ
+    for (let index in tmpNotificationsOrder)
+    {
+        let target =
+            {
+                type: tmpNotificationsOrder[index],
+                lastCheckTime: 0
+            };
+
+        //ターゲットタイプで分岐
+        switch (tmpNotificationsOrder[index])
+        {
+            case "<%= AppConst.MT %>":
+            {//返信
+                target.limit = <%= Setting.urlTwitterApi.mt.limit %>;
+                break;
+            }
+            case "<%= AppConst.RT %>":
+            {//RT
+                target.limit = <%= Setting.urlTwitterApi.rt.limit %>;
+                break;
+            }
+            case "<%= AppConst.FOLLOW %>":
+            {//フォロー
+                target.limit = <%= Setting.urlTwitterApi.follow.limit %>;
+                break;
+            }
+            default:
+            {//他
+                //機能的には起こらない
+                fatal(arguments.callee.name, tmpNotificationsOrder[index]);
+                break;
+            }
+        }
+
+        TargetType.push(target);
+    }
 
     //区切りが入った未読数を表すタイトル作成
-    let initTitle = makeInitTitle(<%= list.length %>)
+    let initTitle = makeInitTitle(<%= List.length %>, tmpNotificationsOrder.length);
 
     $("title").text(initTitle);
-    setTimeout(check, <%= setting.checkIntervalMs %>);
+    setTimeout(check, 10000);
+    $("title").text($("title").text().replace(":", "|"));
 }
 </script>
 </head>
@@ -418,28 +981,27 @@ td { white-space:nowrap; }
 </style>
 <form>
     チェック停止<input type="checkbox" id="ctrl"><br>
-    状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="40" readonly>
+    状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="25" readonly>
 </form>
 <table border="1">
     <tr>
-        <td>No.</td>
+        <td>ターゲット</td>
         <td>未読数</td>
-        <td>リスト別名</td>
+        <td>通称</td>
         <td>URL</td>
         <td hidden>チェック日時</td>
         <td hidden>最新概要</td>
     </tr>
 <%
-var nowobj = new Date();
-for (var i = 0; i < list.length; i++)
+for (var i = 0; i < List.length; i++)
 {
 %>
     <tr>
         <td><%= i %></td>
         <td id="list_<%= i %>_Unread"></td>
-        <td><%= list[i].alias %></td>
-        <td><a id="list_<%= i %>_Url" href="<%= list[i].url %>" target="tw_list_auto_checker_<%= i %>" onclick="resetUnread(<%= i %>);"><%= list[i].url %></a></td>
-        <td id="list_<%= i %>_CheckDatetime" hidden><%= nowobj.toLocaleString() %></td>
+        <td><%= List[i].alias %></td>
+        <td><a id="list_<%= i %>_Url" href="<%= List[i].url %>" target="tw_list_auto_checker_<%= i %>" onclick="resetUnread(<%= i %>);"><%= List[i].url %></a></td>
+        <td id="list_<%= i %>_CheckDatetime" hidden></td>
         <td id="list_<%= i %>_Overview" hidden></td>
     </tr>
 <%
@@ -452,6 +1014,31 @@ for (var i = 0; i < list.length; i++)
     }
 }
 %>
+    <tr></tr><tr></tr>
+    <tr>
+        <td><%= AppConst.MT %></td>
+        <td id="list_<%= AppConst.MT %>_Unread"></td>
+        <td>返信</td>
+        <td><a id="notifications_Url" href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td id="list_<%= AppConst.MT %>_CheckDatetime" hidden></td>
+        <td id="list_<%= AppConst.MT %>_Overview" hidden></td>
+    </tr>
+    <tr>
+        <td><%= AppConst.RT %></td>
+        <td id="list_<%= AppConst.RT %>_Unread"></td>
+        <td>RT</td>
+        <td><a href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td id="list_<%= AppConst.RT %>_CheckDatetime" hidden></td>
+        <td id="list_<%= AppConst.RT %>_Overview" hidden></td>
+    </tr>
+    <tr>
+        <td><%= AppConst.FOLLOW %></td>
+        <td id="list_<%= AppConst.FOLLOW %>_Unread"></td>
+        <td>フォロー</td>
+        <td><a href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td id="list_<%= AppConst.FOLLOW %>_CheckDatetime" hidden></td>
+        <td id="list_<%= AppConst.FOLLOW %>_Overview" hidden></td>
+    </tr>
 </table>
 <script>
 //初期化
