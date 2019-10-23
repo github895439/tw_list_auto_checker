@@ -31,12 +31,6 @@ var Target;
  var TargetType;
 
 /**
- * 現チェックリストNo.
- * @static
- */
-var Index;
-
-/**
  * デバッグモード
  * クライアントでデバッグしやすくするため
  * @static
@@ -588,7 +582,7 @@ function syncAjax(url)
                         */
                         function(jqXHR, textStatus, errorThrown)
                         {
-                            console.error("error no." + Index);
+                            console.error("ERROR:" + url);
                             console.error(jqXHR);
                             console.error(textStatus);
                             console.error(errorThrown);
@@ -789,12 +783,12 @@ async function check()
 
                 let tmpDate = new Date();
                 $("#lastcheck").attr("value", tmpDate.toLocaleString());
+            }
 
-                //ターゲットがリストか
-                if (TargetType[index].type == "<%= AppConst.LIST %>")
-                {
-                    TargetType[index].index = (TargetType[index].index + 1) % <%= List.length %>;
-                }
+            //ターゲットがリストか
+            if (TargetType[index].type == "<%= AppConst.LIST %>")
+            {
+                TargetType[index].index = (TargetType[index].index + 1) % <%= List.length %>;
             }
         }
     }
@@ -904,7 +898,6 @@ function initialize()
             unread: "",
             follower: []
         };
-    Index = 0;
     let tmpNotificationsOrder = <%- Setting.notificationsOrder %>;
     NotificationsOrder = {};
 
@@ -978,10 +971,11 @@ function initialize()
 <body>
 <style>
 td { white-space:nowrap; }
+.bg_gray { background-color:gray; }
 </style>
 <form>
     チェック停止<input type="checkbox" id="ctrl"><br>
-    状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="25" readonly>
+    状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="20" readonly>
 </form>
 <table border="1">
     <tr>
@@ -1027,7 +1021,7 @@ for (var i = 0; i < List.length; i++)
         <td><%= AppConst.RT %></td>
         <td id="list_<%= AppConst.RT %>_Unread"></td>
         <td>RT</td>
-        <td><a href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td class="bg_gray"></td>
         <td id="list_<%= AppConst.RT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.RT %>_Overview" hidden></td>
     </tr>
@@ -1035,7 +1029,7 @@ for (var i = 0; i < List.length; i++)
         <td><%= AppConst.FOLLOW %></td>
         <td id="list_<%= AppConst.FOLLOW %>_Unread"></td>
         <td>フォロー</td>
-        <td><a href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td class="bg_gray"></td>
         <td id="list_<%= AppConst.FOLLOW %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.FOLLOW %>_Overview" hidden></td>
     </tr>
