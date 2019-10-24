@@ -107,7 +107,7 @@ function makeQuery(index)
         fatal(arguments.callee.name, TargetType[index].type);
     }
 
-    //エラー情報除去
+    //未読数取得
     let unread = getUnreadByTargetTypeIndex(index, "<%= AppConst.ON %>");
 
     //初回か
@@ -138,18 +138,17 @@ function makeQuery(index)
 
 /**
  * ターゲットインデックスから未読数を取得する。
- * エラーの場合は「E」になる。
- * エラーをトリムする場合はtrimError引数に"<%= AppConst.ON %>"を指定し、戻り値は今回の更新前の未読数になる。
+ * エラーの場合は「E」、リセットの場合は「R」になる。
+ * 両方の場合は「R」になる。
+ * rawSwitchが"<%= AppConst.ON %>"の場合は上記を行わない。
  * @constructor
  * @param {object} index ターゲットのインデックス
- * @param {string} trimError エラー状態をトリムする指定(省略可)
+ * @param {string} rawSwitch "<%= AppConst.ON %>"か"<%= AppConst.OFF %>"(省略時)
  * @returns {string} 未読数
  */
- //#
- function getUnreadByTargetIndex(index, trimError = "<%= AppConst.OFF %>")
+ function getUnreadByTargetIndex(index, rawSwitch = "<%= AppConst.OFF %>")
 {
     let ret;
-    let unread;
 
     //indexが無効か
     if (!Target.hasOwnProperty(index))
@@ -158,16 +157,39 @@ function makeQuery(index)
         fatal(arguments.callee.name, index);
     }
 
-    unread = Target[index].unread;
+    ret = Target[index].unread;
 
-    //エラーをトリムするか
-    if (trimError == "<%= AppConst.ON %>")
-    {//する
-        ret = unread.replace("E", "");
-    }
-    else
-    {//しない(エラー状態の場合は「E」になる)
-        ret = unread.charAt(unread.length - 1);
+    //ロースイッチが"<%= AppConst.OFF %>"か
+    if (rawSwitch == "<%= AppConst.OFF %>")
+    {
+        //ターゲットがリストか
+        if (!isNaN(index))
+        {//である
+            //リセットか
+            if (Target[index].reset == "<%= AppConst.ON %>")
+            {
+                ret = "R";
+            }
+            //エラーか
+            else if (Target[index].error == "<%= AppConst.ON %>")
+            {
+                ret = "E";
+            }
+        }
+        //ターゲットがあるか
+        else if (NotificationsOrder.hasOwnProperty(index))
+        {//ある
+            //リセットか
+            if (Target["<%= AppConst.MT %>"].reset == "<%= AppConst.ON %>")
+            {
+                ret = "R";
+            }
+            //エラーか
+            else if (Target[index].error == "<%= AppConst.ON %>")
+            {
+                ret = "E";
+            }
+        }
     }
 
     return ret;
@@ -175,19 +197,17 @@ function makeQuery(index)
 
 /**
  * ターゲットタイプインデックスから未読数を取得する。
- * ターゲットタイプがリストの場合は現在のインデックスが対象となる。
- * エラーの場合は「E」になる。
- * エラーをトリムする場合はtrimError引数に"<%= AppConst.ON %>"を指定し、戻り値は今回の更新前の未読数になる。
+ * エラーの場合は「E」、リセットの場合は「R」になる。
+ * 両方の場合は「R」になる。
+ * rawSwitchが"<%= AppConst.ON %>"の場合は上記を行わない。
  * @constructor
  * @param {number} index ターゲットタイプのインデックス
- * @param {string} trimError エラー状態をトリムする指定(省略可)
+ * @param {string} rawSwitch "<%= AppConst.ON %>"か"<%= AppConst.OFF %>"(省略時)
  * @returns {string} 未読数
  */
  //#
-function getUnreadByTargetTypeIndex(index, trimError = "<%= AppConst.OFF %>")
+function getUnreadByTargetTypeIndex(index, rawSwitch = "<%= AppConst.OFF %>")
 {
-    let ret;
-
     //indexが無効か
     if (!TargetType.hasOwnProperty(index))
     {
@@ -198,12 +218,12 @@ function getUnreadByTargetTypeIndex(index, trimError = "<%= AppConst.OFF %>")
     //ターゲットタイプがリストか
     if (TargetType[index].type == "<%= AppConst.LIST %>")
     {//である
-        ret = getUnreadByTargetIndex(TargetType[index].index, trimError);
+        ret = getUnreadByTargetIndex(TargetType[index].index, rawSwitch);
     }
     //ターゲットタイプがあるか
     else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
     {//ある
-        ret = getUnreadByTargetIndex(TargetType[index].type, trimError);
+        ret = getUnreadByTargetIndex(TargetType[index].type, rawSwitch);
     }
     else
     {//ない
@@ -231,22 +251,18 @@ function getUnreadByTargetTypeIndex(index, trimError = "<%= AppConst.OFF %>")
         fatal(arguments.callee.name, index);
     }
 
+    //未読数取得
+    let char = getUnreadByTargetIndex(index);
+
     //ターゲットがリストか
     if (!isNaN(index))
     {//である
         let count = index * 1 + 1;
         let tmpIndex = count + Math.floor(count / 4) - (count % 4 == 0 ? 1 : 0);
-
-        //未読数取得
-        let char = getUnreadByTargetIndex(index);
-
         arrayTitle[tmpIndex - 1] = char;
     }
     else
     {//ではない
-        //未読数取得
-        let char = getUnreadByTargetIndex(index);
-
         arrayTitle[arrayTitle.length + NotificationsOrder[index]] = char;
     }
 
@@ -517,7 +533,7 @@ function analyzeRes(ajaxRes)
     DEBUG("from node.js: " + [resIndex, resResult, resData.length].join(","));
 
     //未読数取得
-    let unread = getUnreadByTargetIndex(resIndex, "<%= AppConst.ON %>");
+    let unread = Target[resIndex].unread;
 
     //successか
     if (resResult == "<%= AppConst.SUCCESS %>")
@@ -531,7 +547,7 @@ function analyzeRes(ajaxRes)
         //リセットか
         else if (unread == "?")
         {
-            //初回データ格納
+            //リセットデータ格納(初回と同じ)
             setDataFirst(resIndex, resData);
         }
         else
@@ -539,12 +555,15 @@ function analyzeRes(ajaxRes)
             //初回後データ格納
             setDataNext(resIndex, resData);
         }
+
+        Target[resIndex].error = "<%= AppConst.OFF %>";
+        $("#list_" + resIndex + "_Error").html("");
     }
     else
     {//successではない
         console.error(resData);
-        Target[resIndex].unread = unread + "E";
-        $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
+        Target[resIndex].error = "<%= AppConst.ON %>";
+        $("#list_" + resIndex + "_Error").html("<b>" + Target[resIndex].error + "</b>");
     }
 
     //タイトルにチェック状況表示
@@ -703,7 +722,7 @@ function getReset(index)
  * @constructor
  * @param {number} index ターゲットタイプのインデックス
  */
-function setReset(index)
+function clearReset(index)
 {
     //ターゲットタイプがリストか
     if (TargetType[index].type == "<%= AppConst.LIST %>")
@@ -711,6 +730,7 @@ function setReset(index)
         Target[TargetType[index].index].reset = "<%= AppConst.OFF %>";
         Target[TargetType[index].index].unread = "?";
         Target[TargetType[index].index].overview = "";
+        $("#list_" + TargetType[index].index + "_Reset").html("");
     }
     //ターゲットタイプがあるか
     else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
@@ -722,6 +742,8 @@ function setReset(index)
         {
             Target[key].unread = "?";
         }
+
+        $("#list_<%= AppConst.MT %>_Reset").html("");
     }
     else
     {//ない
@@ -761,7 +783,7 @@ async function check()
             if (reset == "<%= AppConst.ON %>")
             {
                 //リセット
-                setReset(index);
+                clearReset(index);
 
                 //tableタグにチェック状況表示
                 setTableTag(index);
@@ -803,15 +825,21 @@ async function check()
  */
 function resetUnread(index)
 {
-    //リストか
+    //ターゲットがリストか
     if (!isNaN(index))
     {//である
         Target[index].reset = "<%= AppConst.ON %>";
+        $("#list_" + index + "_Reset").html("<b><%= AppConst.ON %></b>");
+        setTitleByTargetIndex(index);
         DEBUG("unread reset index: " + index);
     }
+    //ターゲットが通知か
+    //　通知のリセットは手段が同じため"<%= AppConst.MT %>"に集約する。
     else if (index == "notifications")
     {//である
         Target["<%= AppConst.MT %>"].reset = "<%= AppConst.ON %>";
+        $("#list_<%= AppConst.MT %>_Reset").html("<b><%= AppConst.ON %></b>");
+        setTitleByTargetIndex("<%= AppConst.MT %>");
         DEBUG("unread reset notifications");
     }
     else
@@ -876,7 +904,8 @@ function initialize()
                 lastReadTweetId: "",
                 tweetIdNext: "",
                 overview: "",
-                reset: "<%= AppConst.OFF %>"
+                reset: "<%= AppConst.OFF %>",
+                error: "<%= AppConst.OFF %>"
             });
         open($("a#list_" + index + "_Url").text(), "tw_list_auto_checker_" + index);
     }
@@ -885,18 +914,21 @@ function initialize()
         {
             unread: "",
             lastReadTweetId: "",
-            reset: "<%= AppConst.OFF %>"
+            reset: "<%= AppConst.OFF %>",
+            error: "<%= AppConst.OFF %>"
         };
     Target["<%= AppConst.RT %>"] =
         {
             unread: "",
             lastReadTweetId: "",
-            rtCount: ""
+            rtCount: "",
+            error: "<%= AppConst.OFF %>"
         };
     Target["<%= AppConst.FOLLOW %>"] =
         {
             unread: "",
-            follower: []
+            follower: [],
+            error: "<%= AppConst.OFF %>"
         };
     let tmpNotificationsOrder = <%- Setting.notificationsOrder %>;
     NotificationsOrder = {};
@@ -981,6 +1013,8 @@ td { white-space:nowrap; }
     <tr>
         <td>ターゲット</td>
         <td>未読数</td>
+        <td>リセット</td>
+        <td>エラー</td>
         <td>通称</td>
         <td>URL</td>
         <td hidden>チェック日時</td>
@@ -993,6 +1027,8 @@ for (var i = 0; i < List.length; i++)
     <tr>
         <td><%= i %></td>
         <td id="list_<%= i %>_Unread"></td>
+        <td id="list_<%= i %>_Reset"></td>
+        <td id="list_<%= i %>_Error"></td>
         <td><%= List[i].alias %></td>
         <td><a id="list_<%= i %>_Url" href="<%= List[i].url %>" target="tw_list_auto_checker_<%= i %>" onclick="resetUnread(<%= i %>);"><%= List[i].url %></a></td>
         <td id="list_<%= i %>_CheckDatetime" hidden></td>
@@ -1012,6 +1048,8 @@ for (var i = 0; i < List.length; i++)
     <tr>
         <td><%= AppConst.MT %></td>
         <td id="list_<%= AppConst.MT %>_Unread"></td>
+        <td id="list_<%= AppConst.MT %>_Reset"></td>
+        <td id="list_<%= AppConst.MT %>_Error"></td>
         <td>返信</td>
         <td><a id="notifications_Url" href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
         <td id="list_<%= AppConst.MT %>_CheckDatetime" hidden></td>
@@ -1020,6 +1058,8 @@ for (var i = 0; i < List.length; i++)
     <tr>
         <td><%= AppConst.RT %></td>
         <td id="list_<%= AppConst.RT %>_Unread"></td>
+        <td class="bg_gray"></td>
+        <td id="list_<%= AppConst.RT %>_Error"></td>
         <td>RT</td>
         <td class="bg_gray"></td>
         <td id="list_<%= AppConst.RT %>_CheckDatetime" hidden></td>
@@ -1028,6 +1068,8 @@ for (var i = 0; i < List.length; i++)
     <tr>
         <td><%= AppConst.FOLLOW %></td>
         <td id="list_<%= AppConst.FOLLOW %>_Unread"></td>
+        <td class="bg_gray"></td>
+        <td id="list_<%= AppConst.FOLLOW %>_Error"></td>
         <td>フォロー</td>
         <td class="bg_gray"></td>
         <td id="list_<%= AppConst.FOLLOW %>_CheckDatetime" hidden></td>
