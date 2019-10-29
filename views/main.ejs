@@ -363,7 +363,7 @@ function convertForList(index)
 function setDataFirst(resIndex, resData)
 {
     Target[resIndex].unread = "0";
-    $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
+    $("#list_" + resIndex + "_Unread").html(Target[resIndex].unread);
 
     //ターゲットがリストか
     if (!isNaN(resIndex))
@@ -490,8 +490,13 @@ function setDataNext(resIndex, resData)
                     if (unread <= 9)
                     {
                         Target[resIndex].unread = unread + "";
-                        DEBUG("unread count: " + Target[resIndex].unread);
                     }
+                }
+
+                //未読オーバーではないか
+                if (Target[resIndex].unread != "before check")
+                {
+                    DEBUG("unread count: " + Target[resIndex].unread);
                 }
 
                 break;
@@ -512,7 +517,15 @@ function setDataNext(resIndex, resData)
         DEBUG("unread over index: " + resIndex);
     }
 
-    $("#list_" + resIndex + "_Unread").html("<b>" + Target[resIndex].unread + "</b>");
+    let html = Target[resIndex].unread;
+
+    //未読があるか
+    if (html != "0")
+    {
+        html = "<b>" + html + "</b>";
+    }
+
+    $("#list_" + resIndex + "_Unread").html(html);
 }
 
 /**
@@ -563,7 +576,7 @@ function analyzeRes(ajaxRes)
     {//successではない
         console.error(resData);
         Target[resIndex].error = "<%= AppConst.ON %>";
-        $("#list_" + resIndex + "_Error").html("<b>" + Target[resIndex].error + "</b>");
+        $("#list_" + resIndex + "_Error").html(resData);
     }
 
     //タイトルにチェック状況表示
@@ -705,7 +718,7 @@ function getReset(index)
     //ターゲットタイプがあるか
     else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
     {//ある
-        ret = Target["<%= AppConst.MT %>"].reset;
+        ret = Target[TargetType[index].type].reset;
     }
     else
     {//ない
@@ -735,15 +748,9 @@ function clearReset(index)
     //ターゲットタイプがあるか
     else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
     {//ある
-        Target["<%= AppConst.MT %>"].reset = "<%= AppConst.OFF %>";
-
-        //通知を全てリセットするループ
-        for (let key of Object.keys(NotificationsOrder))
-        {
-            Target[key].unread = "?";
-        }
-
-        $("#list_<%= AppConst.MT %>_Reset").html("");
+        Target[TargetType[index].type].reset = "<%= AppConst.OFF %>";
+        Target[TargetType[index].type].unread = "?";
+        $("#list_" + TargetType[index].type + "_Reset").html("");
     }
     else
     {//ない
@@ -759,7 +766,7 @@ function clearReset(index)
 async function check()
 {
     let tmpTitle = $("title").text();
-    $("title").text(tmpTitle.includes("|") ? tmpTitle.replace("|", "-") : tmpTitle.replace("-", "|"));
+    $("title").text(tmpTitle.includes("=") ? tmpTitle.replace("=", "-") : tmpTitle.replace("-", "="));
 
     //画面でチェック停止されていないか
     if (!$("#ctrl").prop("checked"))
@@ -838,8 +845,14 @@ function resetUnread(index)
     else if (index == "notifications")
     {//である
         Target["<%= AppConst.MT %>"].reset = "<%= AppConst.ON %>";
+        Target["<%= AppConst.RT %>"].reset = "<%= AppConst.ON %>";
+        Target["<%= AppConst.FOLLOW %>"].reset = "<%= AppConst.ON %>";
         $("#list_<%= AppConst.MT %>_Reset").html("<b><%= AppConst.ON %></b>");
+        $("#list_<%= AppConst.RT %>_Reset").html("<b><%= AppConst.ON %></b>");
+        $("#list_<%= AppConst.FOLLOW %>_Reset").html("<b><%= AppConst.ON %></b>");
         setTitleByTargetIndex("<%= AppConst.MT %>");
+        setTitleByTargetIndex("<%= AppConst.RT %>");
+        setTitleByTargetIndex("<%= AppConst.FOLLOW %>");
         DEBUG("unread reset notifications");
     }
     else
@@ -913,13 +926,14 @@ function initialize()
     Target["<%= AppConst.MT %>"] =
         {
             unread: "",
-            lastReadTweetId: "",
             reset: "<%= AppConst.OFF %>",
+            lastReadTweetId: "",
             error: "<%= AppConst.OFF %>"
         };
     Target["<%= AppConst.RT %>"] =
         {
             unread: "",
+            reset: "<%= AppConst.OFF %>",
             lastReadTweetId: "",
             rtCount: "",
             error: "<%= AppConst.OFF %>"
@@ -927,6 +941,7 @@ function initialize()
     Target["<%= AppConst.FOLLOW %>"] =
         {
             unread: "",
+            reset: "<%= AppConst.OFF %>",
             follower: [],
             error: "<%= AppConst.OFF %>"
         };
@@ -996,27 +1011,35 @@ function initialize()
 
     $("title").text(initTitle);
     setTimeout(check, 10000);
-    $("title").text($("title").text().replace(":", "|"));
+    $("title").text($("title").text().replace(":", "-"));
 }
 </script>
 </head>
 <body>
 <style>
-td { white-space:nowrap; }
+table { border: 1px solid black; }
+td
+{
+    white-space:nowrap;
+    border: 1px solid black;
+}
 .bg_gray { background-color:gray; }
+.bg_white { background-color:white; }
+.bg_silver { background-color:silver; }
+.bg_lsb { background-color:lightskyblue; }
 </style>
 <form>
     チェック停止<input type="checkbox" id="ctrl"><br>
     状態<input id="status" type="text" value="未通信" readonly>　最終チェック日時<input id="lastcheck" type="text" value="" size="20" readonly>
 </form>
-<table border="1">
-    <tr>
+<table>
+    <tr class="bg_lsb">
         <td>ターゲット</td>
         <td>未読数</td>
         <td>リセット</td>
-        <td>エラー</td>
         <td>通称</td>
         <td>URL</td>
+        <td>エラー</td>
         <td hidden>チェック日時</td>
         <td hidden>最新概要</td>
     </tr>
@@ -1024,18 +1047,32 @@ td { white-space:nowrap; }
 for (var i = 0; i < List.length; i++)
 {
 %>
-    <tr>
+<%
+    if (i % 2 == 0)
+    {
+%>
+    <!--視認性を上げるために縞にする-->
+    <tr class="bg_white">
+<%
+    }
+    else
+    {
+%>
+    <tr class="bg_silver">
+<%
+    }
+%>
         <td><%= i %></td>
         <td id="list_<%= i %>_Unread"></td>
         <td id="list_<%= i %>_Reset"></td>
-        <td id="list_<%= i %>_Error"></td>
         <td><%= List[i].alias %></td>
         <td><a id="list_<%= i %>_Url" href="<%= List[i].url %>" target="tw_list_auto_checker_<%= i %>" onclick="resetUnread(<%= i %>);"><%= List[i].url %></a></td>
+        <td id="list_<%= i %>_Error"></td>
         <td id="list_<%= i %>_CheckDatetime" hidden></td>
         <td id="list_<%= i %>_Overview" hidden></td>
     </tr>
 <%
-    if ( i % 4 == 3)
+    if (i % 4 == 3)
     {
 %>
     <!--視認性を上げるために区切りを入れる-->
@@ -1049,29 +1086,29 @@ for (var i = 0; i < List.length; i++)
         <td><%= AppConst.MT %></td>
         <td id="list_<%= AppConst.MT %>_Unread"></td>
         <td id="list_<%= AppConst.MT %>_Reset"></td>
-        <td id="list_<%= AppConst.MT %>_Error"></td>
         <td>返信</td>
         <td><a id="notifications_Url" href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td id="list_<%= AppConst.MT %>_Error"></td>
         <td id="list_<%= AppConst.MT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.MT %>_Overview" hidden></td>
     </tr>
     <tr>
         <td><%= AppConst.RT %></td>
         <td id="list_<%= AppConst.RT %>_Unread"></td>
-        <td class="bg_gray"></td>
-        <td id="list_<%= AppConst.RT %>_Error"></td>
+        <td id="list_<%= AppConst.RT %>_Reset"></td>
         <td>RT</td>
         <td class="bg_gray"></td>
+        <td id="list_<%= AppConst.RT %>_Error"></td>
         <td id="list_<%= AppConst.RT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.RT %>_Overview" hidden></td>
     </tr>
     <tr>
         <td><%= AppConst.FOLLOW %></td>
         <td id="list_<%= AppConst.FOLLOW %>_Unread"></td>
-        <td class="bg_gray"></td>
-        <td id="list_<%= AppConst.FOLLOW %>_Error"></td>
+        <td id="list_<%= AppConst.FOLLOW %>_Reset"></td>
         <td>フォロー</td>
         <td class="bg_gray"></td>
+        <td id="list_<%= AppConst.FOLLOW %>_Error"></td>
         <td id="list_<%= AppConst.FOLLOW %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.FOLLOW %>_Overview" hidden></td>
     </tr>
