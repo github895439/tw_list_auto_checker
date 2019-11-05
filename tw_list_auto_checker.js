@@ -514,9 +514,18 @@ App.get('/ajax/check',
             data = setDataToClient(query[Setting.checkIf.req.index], JSON.parse(twitterRes.detail[0]));
         }
         else
-        {//successではない	
-            console.error(twitterRes.detail[2]);
-            data = twitterRes.detail[2];
+        {//successではない
+            //bodyがあるか
+            if (typeof(twitterRes.detail[2]) != "undefined")
+            {//ある
+                data = twitterRes.detail[2];
+            }
+            else
+            {//ない
+                data = [twitterRes.detail[0].errno, twitterRes.detail[0].code].join(",");
+            }
+
+            console.error(data);
         }
     
         let tmpRes = {};
