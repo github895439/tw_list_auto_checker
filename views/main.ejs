@@ -55,6 +55,8 @@ function DEBUG(str)
     {
         console.debug("[DEBUG]" + str);
     }
+
+    return;
 }
 
 /**
@@ -81,7 +83,7 @@ function fatal(func, errorInfo)
  */
 function makeQuery(index)
 {
-    let ret = "";
+    let ret = "?";
     let query = {};
 
     //indexが無効か
@@ -132,7 +134,6 @@ function makeQuery(index)
     }
 
     ret = ret.substr(0, ret.length - 1);
-    ret = "?" + ret;
     return ret;
 }
 
@@ -267,6 +268,7 @@ function getUnreadByTargetTypeIndex(index, rawSwitch = "<%= AppConst.OFF %>")
     }
 
     $("title").text(arrayTitle.join(""));
+    return;
 }
 
 /**
@@ -300,6 +302,8 @@ function setTitleByTargetTypeIndex(index)
         //機能的には起こらない
         fatal(arguments.callee.name, TargetType[index].type);
     }
+
+    return;
 }
 
 /**
@@ -333,6 +337,8 @@ function setTableTag(index)
         //機能的には起こらない
         fatal(arguments.callee.name, TargetType[index].type);
     }
+
+    return;
 }
 
 /**
@@ -401,6 +407,8 @@ function setDataFirst(resIndex, resData)
             }
         }
     }
+
+    return;
 }
 
 /**
@@ -526,6 +534,7 @@ function setDataNext(resIndex, resData)
     }
 
     $("#list_" + resIndex + "_Unread").html(html);
+    return;
 }
 
 /**
@@ -581,6 +590,8 @@ function analyzeRes(ajaxRes)
 
     //タイトルにチェック状況表示
     setTitleByTargetIndex(resIndex);
+
+    return;
 }
 
 /**
@@ -656,6 +667,8 @@ async function callAjax(index)
 
     //ajaxのレスポンス解析
     analyzeRes(ajaxRes);
+
+    return;
 }
 
 /**
@@ -757,6 +770,8 @@ function clearReset(index)
         //機能的には起こらない
         fatal(arguments.callee.name, TargetType[index].type);
     }
+
+    return;
 }
 
 /**
@@ -823,6 +838,7 @@ async function check()
     }
 
     setTimeout(check, 2000);
+    return;
 }
 
 /**
@@ -860,6 +876,8 @@ function resetUnread(index)
         //機能的には起こらない
         fatal(arguments.callee.name, index);
     }
+
+    return;
 }
 
 /**
@@ -1012,6 +1030,7 @@ function initialize()
     $("title").text(initTitle);
     setTimeout(check, 10000);
     $("title").text($("title").text().replace(":", "-"));
+    return;
 }
 </script>
 </head>

@@ -51,6 +51,8 @@ function TESTINIT()
             }
         }
     }
+
+    return;
 }
 
 /**
@@ -128,13 +130,13 @@ function TEST(src, reference)
                 break;
             }
         }
-
-        return ret;
     }
     else
     {//ではない
-        return src;
+        ret = src;
     }
+
+    return ret;
 }
 
 /**
@@ -148,6 +150,8 @@ function DEBUG(str)
     {
         console.debug("[DEBUG] " + str);
     }
+
+    return;
 }
 
 /**
