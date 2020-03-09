@@ -374,9 +374,15 @@ function setDataFirst(resIndex, resData)
     //ターゲットがリストか
     if (!isNaN(resIndex))
     {//である
-        Target[resIndex].lastReadTweetId = resData[0].<%= Setting.checkIf.res.list.tweedId %>;
-        Target[resIndex].overview = resData[0].<%= Setting.checkIf.res.list.overview %>;
-        $("#list_" + resIndex + "_Overview").html(Target[resIndex].overview);
+        DEBUG("resData.length:" + resData.length);
+
+        //Tweetがあるか
+        if (resData.length == 1)
+        {
+            Target[resIndex].lastReadTweetId = resData[0].<%= Setting.checkIf.res.list.tweedId %>;
+            Target[resIndex].overview = resData[0].<%= Setting.checkIf.res.list.overview %>;
+            $("#list_" + resIndex + "_Overview").html(Target[resIndex].overview);
+        }
     }
     else
     {//ではない
@@ -425,11 +431,15 @@ function setDataNext(resIndex, resData)
     //ターゲットがリストか
     if (!isNaN(resIndex))
     {//である
-        $("#list_" + resIndex + "_Overview").html(resData[0].<%= Setting.checkIf.res.list.overview %>);
-
         //APIが戻したTweetをチェックするループ
         for (let index = 0; index < resData.length; index++)
         {
+            //最新のTweetか
+            if (index == 0)
+            {
+                $("#list_" + resIndex + "_Overview").html(resData[index].<%= Setting.checkIf.res.list.overview %>);
+            }
+
             //既読TweetがAPIが戻したTweetにあったか
             if (resData[index].<%= Setting.checkIf.res.list.tweedId %> == Target[resIndex].lastReadTweetId)
             {
