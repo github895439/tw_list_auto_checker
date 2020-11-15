@@ -455,10 +455,10 @@ function setDataToClient(reqIndex, resJson)
             case AppConst.MT:
             {//返信
                 //レスポンスをクライアントへのデータに格納するループ
-                for (let index = 0; index < resJson["statuses"].length; index++)
+                for (let index = 0; index < resJson.length; index++)
                 {
                     let data = {};
-                    data[Setting.checkIf.res.mt.tweedId] = resJson["statuses"][index].id;
+                    data[Setting.checkIf.res.mt.tweedId] = resJson[index].id;
                     ret.push(data);
                 }
 
