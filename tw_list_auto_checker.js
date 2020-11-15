@@ -323,7 +323,7 @@ function setUrlMaterial(query)
                 ret["url"] = Setting.urlTwitterApi["mt"].url;
                 twitterParams =
                     {
-                        "q": "to:tw388192 -from:tw388192",
+                        "q": "to:" + Setting.me + " -from:" + Setting.me,
                         "result_type": "recent"
                     };
 

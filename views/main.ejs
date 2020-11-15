@@ -1119,7 +1119,7 @@ for (var i = 0; i < List.length; i++)
         <td id="list_<%= AppConst.MT %>_Unread"></td>
         <td id="list_<%= AppConst.MT %>_Reset"></td>
         <td>返信</td>
-        <td><a id="mentions_Url" href="https://twitter.com/search?q=to%3Atw388192%20-from%3Atw388192&src=typed_query&f=live" target="tw_list_auto_checker_mentions" onclick="resetUnread('mentions');">https://twitter.com/search?...(mentions)</a></td>
+        <td><a id="mentions_Url" href="https://twitter.com/search?q=to%3A<%= Setting.me %>%20-from%3A<%= Setting.me %>&src=typed_query&f=live" target="tw_list_auto_checker_mentions" onclick="resetUnread('mentions');">https://twitter.com/search?...(mentions)</a></td>
         <td id="list_<%= AppConst.MT %>_Error"></td>
         <td id="list_<%= AppConst.MT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.MT %>_Overview" hidden></td>
