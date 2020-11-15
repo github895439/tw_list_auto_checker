@@ -12,7 +12,7 @@
             "urlTwitterApi": "TwitterAPI関連",
             "position": "タイトル内の位置関連"
         },
-    "debug": "ON",
+    "debug": "OFF",
     "overviewLength": "50",
     "test": "OFF",
     "testPattern": "1",
@@ -116,10 +116,10 @@
                     "//":
                         {
                             "url": "URL",
-                            "limit": "アクセス制限(12秒に1回(=15分で75回))"
+                            "limit": "アクセス制限(5秒に1回(=15分で180回))"
                         },
-                    "url": "/statuses/mentions_timeline.json",
-                    "limit": 12
+                    "url": "/search/tweets.json",
+                    "limit": 5
                 },
             "rt":
                 {

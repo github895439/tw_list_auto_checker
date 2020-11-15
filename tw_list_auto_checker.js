@@ -323,8 +323,8 @@ function setUrlMaterial(query)
                 ret["url"] = Setting.urlTwitterApi["mt"].url;
                 twitterParams =
                     {
-                        "trim_user": "true",
-                        "include_entities": "false"
+                        "q": "to:tw388192 -from:tw388192",
+                        "result_type": "recent"
                     };
 
                 //初回等のチェック状態分岐
@@ -455,10 +455,10 @@ function setDataToClient(reqIndex, resJson)
             case AppConst.MT:
             {//返信
                 //レスポンスをクライアントへのデータに格納するループ
-                for (let index = 0; index < resJson.length; index++)
+                for (let index = 0; index < resJson["statuses"].length; index++)
                 {
                     let data = {};
-                    data[Setting.checkIf.res.mt.tweedId] = resJson[index].id;
+                    data[Setting.checkIf.res.mt.tweedId] = resJson["statuses"][index].id;
                     ret.push(data);
                 }
 

@@ -701,22 +701,19 @@ function isAccessLimit(index)
             ret = true;
         }
     }
+    //ターゲットタイプがあるか
+    else if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
+    {//ある
+        //制限されるペースか
+        if (now - TargetType[index].lastCheckTime <= TargetType[index].limit * 1000)
+        {
+            ret = true;
+        }
+    }
     else
-    {//ではない
-        //ターゲットタイプがあるか
-        if (NotificationsOrder.hasOwnProperty(TargetType[index].type))
-        {//ある
-            //制限されるペースか
-            if (now - TargetType[index].lastCheckTime <= TargetType[index].limit * 1000)
-            {
-                ret = true;
-            }
-        }
-        else
-        {//ない
-            //機能的には起こらない
-            fatal(arguments.callee.name, TargetType[index].type);
-        }
+    {//ない
+        //機能的には起こらない
+        fatal(arguments.callee.name, TargetType[index].type);
     }
 
     return ret;
@@ -866,17 +863,22 @@ function resetUnread(index)
         setTitleByTargetIndex(index);
         DEBUG("unread reset index: " + index);
     }
+    //ターゲットが返信か
+    else if (index == "mentions")
+    {//である
+        Target["<%= AppConst.MT %>"].reset = "<%= AppConst.ON %>";
+        $("#list_<%= AppConst.MT %>_Reset").html("<b><%= AppConst.ON %></b>");
+        setTitleByTargetIndex("<%= AppConst.MT %>");
+        DEBUG("unread reset mentions");
+    }
     //ターゲットが通知か
     //　通知のリセットは手段が同じため"<%= AppConst.MT %>"に集約する。
     else if (index == "notifications")
     {//である
-        Target["<%= AppConst.MT %>"].reset = "<%= AppConst.ON %>";
         Target["<%= AppConst.RT %>"].reset = "<%= AppConst.ON %>";
         Target["<%= AppConst.FOLLOW %>"].reset = "<%= AppConst.ON %>";
-        $("#list_<%= AppConst.MT %>_Reset").html("<b><%= AppConst.ON %></b>");
         $("#list_<%= AppConst.RT %>_Reset").html("<b><%= AppConst.ON %></b>");
         $("#list_<%= AppConst.FOLLOW %>_Reset").html("<b><%= AppConst.ON %></b>");
-        setTitleByTargetIndex("<%= AppConst.MT %>");
         setTitleByTargetIndex("<%= AppConst.RT %>");
         setTitleByTargetIndex("<%= AppConst.FOLLOW %>");
         DEBUG("unread reset notifications");
@@ -934,7 +936,8 @@ function initialize()
     Debug = "<%= Setting.debug %>";
     Target = [];
 
-    open($("a#notifications_Url").text(), "tw_list_auto_checker_notiications");
+    open($("a#notifications_Url").attr("href"), "tw_list_auto_checker_notiications");
+    open($("a#mentions_Url").attr("href"), "tw_list_auto_checker_mentions");
 
     //リストごとの初期化を行うループ
     for (let index = 0; index < <%= List.length %>; index++)
@@ -1116,7 +1119,7 @@ for (var i = 0; i < List.length; i++)
         <td id="list_<%= AppConst.MT %>_Unread"></td>
         <td id="list_<%= AppConst.MT %>_Reset"></td>
         <td>返信</td>
-        <td><a id="notifications_Url" href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
+        <td><a id="mentions_Url" href="https://twitter.com/search?q=to%3Atw388192%20-from%3Atw388192&src=typed_query&f=live" target="tw_list_auto_checker_mentions" onclick="resetUnread('mentions');">https://twitter.com/search?...(mentions)</a></td>
         <td id="list_<%= AppConst.MT %>_Error"></td>
         <td id="list_<%= AppConst.MT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.MT %>_Overview" hidden></td>
@@ -1126,7 +1129,7 @@ for (var i = 0; i < List.length; i++)
         <td id="list_<%= AppConst.RT %>_Unread"></td>
         <td id="list_<%= AppConst.RT %>_Reset"></td>
         <td>RT</td>
-        <td class="bg_gray"></td>
+        <td><a id="notifications_Url" href="https://twitter.com/notifications" target="tw_list_auto_checker_notiications" onclick="resetUnread('notifications');">https://twitter.com/notifications</a></td>
         <td id="list_<%= AppConst.RT %>_Error"></td>
         <td id="list_<%= AppConst.RT %>_CheckDatetime" hidden></td>
         <td id="list_<%= AppConst.RT %>_Overview" hidden></td>
